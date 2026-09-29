@@ -15,7 +15,7 @@ Les pilotes d'imprimante vivent dans leurs propres dépôts, et EcoPrint les int
 | Dépôt | Terminaux | État |
 |---|---|---|
 | [sunmi-print](https://github.com/derricknoutais/sunmi-print) | Sunmi V2 Pro, V2s, P2, T2… — et les marques qui reprennent le service Sunmi | imprime (vérifié sur un V2 Pro) |
-| [zcs-print](https://github.com/derricknoutais/zcs-print) (privé) | ZCS Z90, Z91, Z92, Z100… | reconnu ; imprimera avec le SDK de ZCS, à recevoir |
+| [zcs-print](https://github.com/derricknoutais/zcs-print) (privé) | ZCS Z90, Z91, Z92, Z100… | imprime (vérifié sur un Z92S), avec le SDK SmartPos de ZCS |
 
 ---
 
@@ -25,7 +25,7 @@ Les pilotes d'imprimante vivent dans leurs propres dépôts, et EcoPrint les int
 - **Un Sunmi V2 Pro a deux moteurs web.** Son navigateur est un Chromium **74** — c'est là que tournent vos applications. Mais les applications Android affichent leurs pages avec le WebView du système, resté en version **62** : une application Vite n'y démarre même pas (l'import dynamique date de Chrome 63). Relevé sur un V2 Pro sous Android 7.1.2 : `org.chromium.chrome` 74.0.3710, `com.google.android.webview` 62.0.3202.
 - D'où le mode à préférer sur ce terminal : **l'application web reste dans le navigateur**, et EcoPrint, en service de fond, reçoit les reçus sur `http://127.0.0.1:17321`. Une requête d'une page https vers l'adresse de boucle locale n'est pas du contenu mixte — vérifié dans le Chromium 74 du V2 Pro.
 - **Attention au navigateur par défaut** : sur ce V2 Pro, un lien https s'ouvre dans un vieux Chrome **56** (`com.android.chrome`), où une application Vite ne démarre pas. Ouvrir les applications depuis **Chromium**.
-- **Un ZCS Z92S est récent** : Android 16, WebView et Chrome 143. Le mode coque y fonctionne. Mais un Chrome aussi récent peut demander l'autorisation d'accès au réseau local avant qu'une page publique n'appelle `127.0.0.1` — à vérifier sur le terminal.
+- **Un ZCS Z92S est récent** : Android 16, WebView et Chrome 143. Les deux modes y fonctionnent : son Chrome laisse une page https appeler `127.0.0.1` sans demande d'autorisation — vérifié.
 - **58 mm = 384 points** à 203 dpi (80 mm = 576). Pas de massicot sur ces terminaux : le papier avance de quelques lignes pour se détacher à la barre.
 - **Du texte envoyé tel quel à une imprimante thermique dépend de sa page de codes** : « PAYÉ » peut sortir « PAYÃ‰ ». Une image, jamais.
 
@@ -212,11 +212,17 @@ Sunmi V2 Pro (Android 7.1.2, imprimante POS-V2, 58 mm), le 28 septembre 2026, av
 | page de test dans l'application, pont direct | WebView 62 | reçu d'exemple imprimé (2,5 s), mire imprimée (3,1 s) |
 | page **https** dans le navigateur → `http://127.0.0.1:17321` | Chromium 74 | service détecté, reçu imprimé (2,3 s) |
 
+ZCS Z92S (Android 16, SDK SmartPos 2.0.9, 58 mm), le 29 septembre 2026, avec EcoPrint :
+
+| Chemin | Moteur | Résultat |
+|---|---|---|
+| page de test dans l'application, pont direct | WebView 143 | reçu d'exemple imprimé (2,4 s), mire imprimée (3,0 s) |
+| page **https** dans le navigateur → `http://127.0.0.1:17321` | Chrome 143 | service détecté sans demande d'autorisation, reçu imprimé (2,2 s) |
+
 Les durées sont celles du verdict de l'imprimante, papier sorti.
 
 ## Limites connues
 
-- **ZCS : pas encore d'impression.** Le terminal est reconnu, mais le pilote attend le SDK officiel de ZCS (voir zcs-print). D'ici là, l'état dit « SDK ZCS absent ».
 
 - **Jeu latin seulement** : un caractère absent de la police embarquée (chinois, arabe…) est rendu par une police du système, ou pas du tout.
 - **Signature de développement** : l'APK est signé avec la clé de débogage du poste qui le construit. Une mise à jour construite ailleurs ne s'installera pas par-dessus : prévoir une clé de publication avant d'équiper plusieurs terminaux.

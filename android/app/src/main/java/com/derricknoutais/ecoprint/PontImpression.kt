@@ -3,6 +3,7 @@ package com.derricknoutais.ecoprint
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
+import android.util.Log
 import android.webkit.JavascriptInterface
 import org.json.JSONException
 import org.json.JSONObject
@@ -31,6 +32,7 @@ class PontImpression(private val activite: MainActivity, private val app: EcoPri
 
     @JavascriptInterface
     fun imprimer(id: String, pngBase64: String, options: String) {
+        Log.i(JOURNAL, "pont : imprimer $id (${pngBase64.length} caractères)")
         if (!activite.pageDeConfiance()) return repondre(id, refus().put("ok", false))
 
         val avance = try {
@@ -56,7 +58,8 @@ class PontImpression(private val activite: MainActivity, private val app: EcoPri
     }
 
     private fun repondre(id: String, resultat: JSONObject) {
-        val script = "window.__sunmiPrint&&window.__sunmiPrint.retour(${JSONObject.quote(id)},${JSONObject.quote(resultat.toString())})"
+        Log.i(JOURNAL, "pont : réponse $id → $resultat")
+        val script = "window.__ecoprint&&window.__ecoprint.retour(${JSONObject.quote(id)},${JSONObject.quote(resultat.toString())})"
         activite.runOnUiThread { activite.executer(script) }
     }
 
@@ -67,5 +70,6 @@ class PontImpression(private val activite: MainActivity, private val app: EcoPri
     companion object {
         /** Doit rester égale à VERSION_PONT dans src/pont.ts. */
         const val VERSION = "1"
+        private const val JOURNAL = "EcoPrint"
     }
 }
