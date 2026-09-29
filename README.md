@@ -26,7 +26,7 @@ Les pilotes d'imprimante vivent dans leurs propres dépôts, et EcoPrint les int
 - D'où le mode à préférer sur ce terminal : **l'application web reste dans le navigateur**, et EcoPrint, en service de fond, reçoit les reçus sur `http://127.0.0.1:17321`. Une requête d'une page https vers l'adresse de boucle locale n'est pas du contenu mixte — vérifié dans le Chromium 74 du V2 Pro.
 - **Attention au navigateur par défaut** : sur ce V2 Pro, un lien https s'ouvre dans un vieux Chrome **56** (`com.android.chrome`), où une application Vite ne démarre pas. Ouvrir les applications depuis **Chromium**.
 - **Un ZCS Z92S est récent** : Android 16, WebView et Chrome 143. Les deux modes y fonctionnent : son Chrome laisse une page https appeler `127.0.0.1` sans demande d'autorisation — vérifié.
-- **58 mm = 384 points** à 203 dpi (80 mm = 576). Pas de massicot sur ces terminaux : le papier avance de quelques lignes pour se détacher à la barre.
+- **58 mm = 384 points** à 203 dpi (80 mm = 576). Le V2 Pro et le Z92S n'ont pas de massicot : le papier avance de quelques lignes pour se détacher à la barre. Sur un ZCS qui en a un, EcoPrint coupe le reçu une fois sorti.
 - **Du texte envoyé tel quel à une imprimante thermique dépend de sa page de codes** : « PAYÉ » peut sortir « PAYÃ‰ ». Une image, jamais.
 
 ## Comment ça marche
@@ -61,7 +61,7 @@ Les pilotes entrent dans la construction depuis leurs dépôts, clonés **à cô
 ```
 ~/Herd/ecoprint      ← ce dépôt
 ~/Herd/sunmi-print   ← pilote Sunmi
-~/Herd/zcs-print     ← pilote ZCS (privé), avec le SDK ZCS dans android/pilote/libs/
+~/Herd/zcs-print     ← pilote ZCS (privé), avec le SDK ZCS dans android/sdk/
 ```
 
 Construire l'APK (Android Studio installé ; son Java suffit) :
@@ -146,8 +146,65 @@ try {
 | `refusee` | l'adresse de la page n'est pas autorisée dans EcoPrint |
 | `absente` | ni application ni service : navigateur de bureau, EcoPrint pas installée — ou, sur un ZCS, SDK pas encore intégré |
 | `delai` | aucun verdict dans le temps imparti |
+| `non-pris-en-charge` | étiquette ou écran client : ce terminal ne l'a pas, ou cette version d'EcoPrint ne le pilote pas encore |
 
-`etatImprimante()` donne l'état sans imprimer, et la largeur du papier : le reçu est dessiné à la largeur de l'imprimante trouvée.
+`etatImprimante()` donne l'état sans imprimer, et la largeur du papier : le reçu est dessiné à la largeur de l'imprimante trouvée. Il dit aussi ce que sait faire le terminal :
+
+```ts
+const { capacites } = await etatImprimante();
+// { massicot: true, etiquettes: null, afficheur: { largeur: 480, hauteur: 480 } }
+```
+
+| | |
+|---|---|
+| `massicot` | le reçu est coupé une fois sorti — rien à demander, EcoPrint le fait |
+| `etiquettes` | `false` : pas de papier étiquette (Sunmi) ; `null` : le pilote ne peut pas le savoir d'avance, c'est l'essai qui tranche (ZCS) |
+| `afficheur` | la taille de l'écran client, ou `null` s'il n'y en a pas |
+
+`capacites` est absent avec une application EcoPrint antérieure au protocole 2 : la mettre à jour.
+
+### Étiquettes
+
+Sur une imprimante qui accepte le papier étiquette, les mêmes blocs font une étiquette — un nom, un prix, un QR :
+
+```ts
+await imprimerRecu(
+    {
+        blocs: [
+            { type: 'texte', texte: 'Plaquettes de frein AV', gras: true, alignement: 'centre' },
+            { type: 'texte', texte: montant(18500), taille: 'titre', gras: true, alignement: 'centre' },
+            { type: 'qr', donnees: 'BK341340', taille: 120 },
+        ],
+    },
+    { support: 'etiquette', copies: 4, largeur: 320 }, // 4 étiquettes de 40 mm
+);
+```
+
+L'imprimante passe en mode étiquette, imprime les exemplaires l'un après l'autre en se calant sur l'espace entre deux étiquettes, puis revient au reçu. `largeur` : celle de l'étiquette, en points (8 par mm) ; celle du rouleau par défaut. Rouleau étiquette chargé, sinon l'imprimante le dit.
+
+## L'écran client
+
+Sur un terminal à deux écrans, le petit écran tourné vers le client (480 × 480 sur les ZCS) affiche ce que la page veut — le panier, le total à payer, un QR de paiement, le logo — avec **les mêmes blocs qu'un reçu** :
+
+```ts
+import { afficherClient, effacerClient, montant } from '@derricknoutais/ecoprint';
+
+await afficherClient({
+    blocs: [
+        { type: 'texte', texte: 'LE PALMIER', taille: 'grande', gras: true, alignement: 'centre' },
+        { type: 'separateur' },
+        { type: 'ligne', gauche: '2 × Poulet braisé', droite: montant(13000, '') },
+        { type: 'ligne', gauche: '1 × Jus de bissap', droite: montant(1500, '') },
+        { type: 'separateur', style: 'double' },
+        { type: 'texte', texte: 'À PAYER', alignement: 'centre' },
+        { type: 'texte', texte: montant(14500), taille: 'titre', gras: true, alignement: 'centre' },
+    ],
+});
+
+await effacerClient(); // vente terminée : l'écran revient au blanc
+```
+
+Le contenu est dessiné à la taille exacte de l'écran, en niveaux de gris (un écran n'est pas une tête thermique : les lettres gardent leurs bords lissés), centré, et réduit s'il est trop haut — le client voit tout d'un coup, rien n'est coupé. L'appeler à chaque article ajouté : l'image précédente est remplacée. Sans écran client, `afficherClient` se rejette avec `non-pris-en-charge` : l'appeler partout sans risque, et ignorer ce code.
 
 ## Vue 3
 
@@ -163,6 +220,13 @@ const { imprimer, enCours, erreur } = useImprimante();
     <button :disabled="enCours" @click="imprimer(recu)">Imprimer</button>
     <p v-if="erreur" role="alert">{{ erreur }}</p>
 </template>
+```
+
+Pour l'écran client, `useEcranClient()` rend `afficher(contenu)`, `effacer()`, `disponible`, `enCours` et `erreur`. L'appeler à chaque changement du panier : les demandes passent une à une et seule la plus récente est envoyée. Un terminal sans écran client, ou un navigateur de bureau, n'est pas une erreur : `disponible` passe à `false` et les appels suivants ne font plus rien — pas même une requête vers `127.0.0.1`.
+
+```ts
+const ecran = useEcranClient();
+watch(panier, (p) => ecran.afficher(contenuEcran(p)), { deep: true });
 ```
 
 `useImprimante` ne cherche pas l'imprimante au montage : sur un Chrome de bureau récent, interroger `127.0.0.1` depuis un site public déclenche une demande d'accès au réseau local. Elle cherche quand on imprime, ou quand on appelle `detecter()` (`{ detecterAuMontage: true }` pour un écran réservé aux terminaux).
@@ -193,8 +257,9 @@ Le reçu part en image tramée (`GS v 0`), que toutes les imprimantes thermiques
 
 ```bash
 npm install
-npm test          # compile, puis 69 tests : mise en page, dessin (Skia et la vraie police),
-                  # QR relu par ZXing, ESC/POS, pont, service local, montants, Chrome 62, Node 20
+npm test          # compile, puis 85 tests : mise en page, dessin (Skia et la vraie police),
+                  # QR relu par ZXing, ESC/POS, pont, service local, écran client, étiquettes,
+                  # montants, contrat page ↔ application, Chrome 62, Node 20
 ```
 
 - `ECOPRINT_APERCUS=/un/dossier npm test` enregistre les reçus dessinés en PNG, pour les regarder.
@@ -223,6 +288,6 @@ Les durées sont celles du verdict de l'imprimante, papier sorti.
 
 ## Limites connues
 
-
+- **Massicot, étiquettes, 80 mm et écran client** (protocole 2) sont écrits d'après le SDK ZCS 2.0.9 et testés hors terminal, mais pas encore sur un ZCS qui les a : le Z92S n'a ni massicot ni second écran.
 - **Jeu latin seulement** : un caractère absent de la police embarquée (chinois, arabe…) est rendu par une police du système, ou pas du tout.
 - **Signature de développement** : l'APK est signé avec la clé de débogage du poste qui le construit. Une mise à jour construite ailleurs ne s'installera pas par-dessus : prévoir une clé de publication avant d'équiper plusieurs terminaux.

@@ -36,12 +36,14 @@ export function imprimerRecu(recu_1) {
         if (!etat.transport || (etat.code !== 'prete' && etat.code !== 'simulation')) {
             throw new ErreurImpression(etat.code, etat.message);
         }
+        if (options.support === 'etiquette' && etat.capacites && etat.capacites.etiquettes === false) {
+            throw new ErreurImpression('non-pris-en-charge', "L'imprimante de ce terminal n'imprime pas d'étiquettes.");
+        }
         const toile = yield dessinerRecu(recu, Object.assign(Object.assign({}, options), { largeur: options.largeur || etat.largeur }), options.environnement);
         const png = toile.toDataURL('image/png');
         const donnees = png.slice(png.indexOf(',') + 1);
-        return etat.transport === 'pont'
-            ? envoyerParPont(donnees, { avance: options.avance, delai: options.delai })
-            : envoyerAuServeur(donnees, { port: options.port, avance: options.avance, delai: options.delai });
+        const envoi = { avance: options.avance, support: options.support, copies: options.copies, delai: options.delai };
+        return etat.transport === 'pont' ? envoyerParPont(donnees, envoi) : envoyerAuServeur(donnees, Object.assign(Object.assign({}, envoi), { port: options.port }));
     });
 }
 /**

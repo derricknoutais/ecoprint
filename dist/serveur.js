@@ -46,23 +46,33 @@ export function etatServeur() {
     });
 }
 /**
- * Envoie l'image PNG (base64) au service. Se résout quand le reçu est sorti,
- * se rejette avec une `ErreurImpression` sinon.
+ * Envoie l'image PNG (base64) à imprimer. Se résout quand le reçu — ou la
+ * dernière étiquette — est sorti, se rejette avec une `ErreurImpression` sinon.
  */
-export function envoyerAuServeur(pngBase64_1) {
-    return __awaiter(this, arguments, void 0, function* (pngBase64, options = {}) {
-        if (options.port === false)
+export function envoyerAuServeur(pngBase64, options = {}) {
+    return poster('/imprimer', {
+        image: pngBase64,
+        avance: options.avance === undefined ? 3 : options.avance,
+        support: options.support || 'recu',
+        copies: options.copies || 1,
+    }, options.port, options.delai || 65000);
+}
+/** Affiche une image PNG (base64) sur l'écran client — ou l'efface si elle vaut `null`. */
+export function afficherAuServeur(pngBase64, options = {}) {
+    return poster(pngBase64 === null ? '/effacer' : '/afficher', pngBase64 === null ? {} : { image: pngBase64 }, options.port, options.delai || 15000);
+}
+function poster(chemin, corps, port, delai) {
+    return __awaiter(this, void 0, void 0, function* () {
+        if (port === false)
             throw new ErreurImpression('absente', 'Service d’impression désactivé.');
-        const port = options.port || PORT_PAR_DEFAUT;
-        const delai = options.delai || 65000;
         let reponse;
         try {
-            reponse = yield avecDelai(fetch(adresse(port, '/imprimer'), {
+            reponse = yield avecDelai(fetch(adresse(port || PORT_PAR_DEFAUT, chemin), {
                 method: 'POST',
                 // text/plain : une requête « simple », sans pré-vérification CORS
                 // — un aller-retour de moins. Le service lit le JSON quand même.
                 headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-                body: JSON.stringify({ image: pngBase64, avance: options.avance === undefined ? 3 : options.avance }),
+                body: JSON.stringify(corps),
             }), delai);
         }
         catch (e) {
@@ -70,14 +80,18 @@ export function envoyerAuServeur(pngBase64_1) {
                 throw e;
             throw new ErreurImpression('absente', "Le service d'impression ne répond plus : l'application EcoPrint est-elle ouverte ?");
         }
-        let corps;
+        // Une application antérieure au protocole 2 ne connaît pas l'écran client.
+        if (reponse.status === 404) {
+            throw new ErreurImpression('non-pris-en-charge', "Cette version d'EcoPrint ne sait pas faire cela : la mettre à jour.");
+        }
+        let reponseJson;
         try {
-            corps = yield reponse.json();
+            reponseJson = yield reponse.json();
         }
         catch (_a) {
             throw new ErreurImpression('erreur', `Réponse illisible du service d'impression (HTTP ${reponse.status}).`);
         }
-        return lireVerdict(corps);
+        return lireVerdict(reponseJson);
     });
 }
 /**

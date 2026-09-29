@@ -4,7 +4,21 @@
  * Compilée en un seul script classique par scripts/construire-demo.mjs : elle
  * doit tourner sans bundler, dans le WebView du V2 Pro — Chrome 62.
  */
-import { apercuRecu, ErreurImpression, etatImprimante, imprimerRecu, mire, recuExemple, versionPont, type EtatImprimante, type Recu } from '../src/index.ts';
+import {
+    afficherClient,
+    apercuRecu,
+    ecranExemple,
+    effacerClient,
+    ErreurImpression,
+    etatImprimante,
+    etiquetteExemple,
+    imprimerRecu,
+    mire,
+    recuExemple,
+    versionPont,
+    type EtatImprimante,
+    type Recu,
+} from '../src/index.ts';
 
 const element = (id: string): HTMLElement => {
     const trouve = document.getElementById(id);
@@ -42,6 +56,10 @@ async function afficherEtat(): Promise<void> {
     libelle.className = etat.code === 'prete' || etat.code === 'simulation' ? 'etat-prete' : 'etat-autre';
     element('largeur').textContent = `${etat.largeur} points (${etat.largeur >= 576 ? '80' : '58'} mm)${etat.modele ? ` — ${etat.modele}` : ''}`;
     element('terminal').textContent = etat.terminal ? `${etat.terminal}${etat.pilote ? ` (pilote ${etat.pilote})` : ''}` : '—';
+    const c = etat.capacites;
+    element('capacites').textContent = !c
+        ? '—'
+        : `massicot ${c.massicot ? 'oui' : 'non'} · étiquettes ${c.etiquettes === null ? 'à l’essai' : c.etiquettes ? 'oui' : 'non'} · écran client ${c.afficheur ? `${c.afficheur.largeur} × ${c.afficheur.hauteur}` : 'non'}`;
 }
 
 /** Un dégradé noir → blanc, pour juger la trame de l'imprimante. */
@@ -94,6 +112,25 @@ element('actualiser').addEventListener('click', () => {
     afficherEtat().then(() => journal('État actualisé.'));
 });
 element('imprimer').addEventListener('click', imprimer);
+
+/** Une action sur le terminal, et son verdict dans le journal. */
+function essayer(bouton: string, action: () => Promise<unknown>, succes: string): void {
+    element(bouton).addEventListener('click', () => {
+        const b = element(bouton) as HTMLButtonElement;
+        b.disabled = true;
+        const debut = Date.now();
+        action()
+            .then(() => journal(`${succes} (${((Date.now() - debut) / 1000).toFixed(1)} s).`, 'ok'))
+            .catch((e) => journal(`${e instanceof ErreurImpression ? `[${e.code}] ` : ''}${e instanceof Error ? e.message : String(e)}`, 'erreur'))
+            .then(() => {
+                b.disabled = false;
+            });
+    });
+}
+
+essayer('etiquette', () => imprimerRecu(etiquetteExemple(), { support: 'etiquette', copies: 1 }), 'Étiquette imprimée');
+essayer('ecran', () => afficherClient(ecranExemple()), 'Écran client affiché');
+essayer('effacer', () => effacerClient(), 'Écran client effacé');
 
 montrer(recuAffiche);
 afficherEtat().then(() => {

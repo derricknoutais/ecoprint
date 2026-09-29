@@ -1,7 +1,5 @@
 package com.derricknoutais.ecoprint
 
-import android.graphics.BitmapFactory
-import android.util.Base64
 import android.util.Log
 import org.json.JSONException
 import org.json.JSONObject
@@ -26,8 +24,11 @@ import kotlin.concurrent.thread
  * pour les pages ouvertes dans le NAVIGATEUR du terminal — src/serveur.ts du
  * paquet web ecoprint.
  *
- *   GET  /etat      → l'état de l'imprimante
- *   POST /imprimer  → {"image": "<PNG en base64>", "avance": 3} ; répond quand le reçu est sorti
+ *   GET  /etat      → l'état de l'imprimante et les capacités du terminal
+ *   POST /imprimer  → {"image": "<PNG base64>", "avance": 3, "support": "recu"|"etiquette", "copies": 1} ;
+ *                     répond quand le reçu (ou la dernière étiquette) est sorti
+ *   POST /afficher  → {"image": "<PNG base64>"} : l'image sur l'écran client
+ *   POST /effacer   → efface l'écran client
  *
  * Écoute sur l'adresse de boucle seulement : injoignable depuis le réseau.
  * Ne répond qu'aux origines autorisées dans les réglages ; une requête sans
@@ -137,21 +138,16 @@ class ServeurImpression(
         return when (r.methode + " " + r.chemin.substringBefore('?')) {
             "GET /etat" -> Reponse(200, app.etat().put("version", PontImpression.VERSION).toString(), cors)
             "POST /imprimer" -> Reponse(200, imprimer(r.corps).toString(), cors)
+            "POST /afficher" -> Reponse(200, afficher(r.corps).toString(), cors)
+            "POST /effacer" -> Reponse(200, attendre { app.pilote.afficher(null, it) }.toString(), cors)
             else -> Reponse(404, JSONObject().put("ok", false).put("code", "introuvable").put("message", "${r.methode} ${r.chemin} inconnu.").toString(), cors)
         }
     }
 
     private fun imprimer(corps: ByteArray): JSONObject {
-        val (image, avance) = try {
-            val json = JSONObject(String(corps, Charsets.UTF_8))
-            val octets = Base64.decode(json.getString("image"), Base64.DEFAULT)
-            BitmapFactory.decodeByteArray(octets, 0, octets.size) to json.optInt("avance", 3).coerceIn(0, 20)
-        } catch (e: JSONException) {
-            null to 0
-        } catch (e: IllegalArgumentException) {
-            null to 0
-        }
-        if (image == null) return echec("image", "Image du reçu illisible.")
+        val json = lireJson(corps) ?: return echec("image", "Demande illisible.")
+        val image = Protocole.image(json.optString("image")) ?: return echec("image", "Image du reçu illisible.")
+        val options = Protocole.options(json)
 
         if (app.simulation) {
             // Aucune imprimante reconnue : le dernier reçu est gardé pour qu'on puisse le relire (adb pull).
@@ -165,13 +161,30 @@ class ServeurImpression(
             return JSONObject().put("ok", true).put("simulation", true)
         }
 
+        return attendre { app.pilote.imprimer(image, options, it) }
+    }
+
+    private fun afficher(corps: ByteArray): JSONObject {
+        val json = lireJson(corps) ?: return echec("image", "Demande illisible.")
+        val image = Protocole.image(json.optString("image")) ?: return echec("image", "Image de l'écran client illisible.")
+        return attendre { app.pilote.afficher(image, it) }
+    }
+
+    /** Attend le verdict d'un pilote, rendu sur un autre fil — au plus 75 secondes. */
+    private fun attendre(action: ((JSONObject) -> Unit) -> Unit): JSONObject {
         val verdict = AtomicReference<JSONObject>()
         val fini = CountDownLatch(1)
-        app.pilote.imprimer(image, avance) {
+        action {
             verdict.set(it)
             fini.countDown()
         }
-        return if (fini.await(75, TimeUnit.SECONDS)) verdict.get() else echec("delai", "L'imprimante n'a rendu aucun verdict.")
+        return if (fini.await(75, TimeUnit.SECONDS)) verdict.get() else echec("delai", "Le terminal n'a rendu aucun verdict.")
+    }
+
+    private fun lireJson(corps: ByteArray): JSONObject? = try {
+        JSONObject(String(corps, Charsets.UTF_8))
+    } catch (e: JSONException) {
+        null
     }
 
     private fun echec(code: String, message: String) = JSONObject().put("ok", false).put("code", code).put("message", message)

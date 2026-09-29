@@ -1,15 +1,11 @@
 import type { Recu } from './document.ts';
 import { dessinerRecu, type Environnement, type OptionsDessin, type Toile } from './dessin.ts';
-import { ErreurImpression, etatAbsente, type EtatImprimante, type ResultatImpression } from './etat.ts';
+import { ErreurImpression, etatAbsente, type EtatImprimante, type OptionsEnvoi, type ResultatImpression } from './etat.ts';
 import { LARGEUR_58MM } from './metriques.ts';
 import { envoyerParPont, etatPont, pontDisponible } from './pont.ts';
 import { envoyerAuServeur, etatServeur, type OptionsServeur } from './serveur.ts';
 
-export interface OptionsImpression extends OptionsDessin, OptionsServeur {
-    /** Lignes de papier avancées après le reçu, pour le détacher à la barre ; 3 par défaut. */
-    avance?: number;
-    /** Attente maximale du verdict de l'imprimante, en ms ; 60 000 par défaut. */
-    delai?: number;
+export interface OptionsImpression extends OptionsDessin, OptionsServeur, OptionsEnvoi {
     /** Où dessiner, hors navigateur : les tests passent celui de Node. */
     environnement?: Environnement;
 }
@@ -35,14 +31,16 @@ export async function imprimerRecu(recu: Recu, options: OptionsImpression = {}):
     if (!etat.transport || (etat.code !== 'prete' && etat.code !== 'simulation')) {
         throw new ErreurImpression(etat.code, etat.message);
     }
+    if (options.support === 'etiquette' && etat.capacites && etat.capacites.etiquettes === false) {
+        throw new ErreurImpression('non-pris-en-charge', "L'imprimante de ce terminal n'imprime pas d'étiquettes.");
+    }
 
     const toile = await dessinerRecu(recu, { ...options, largeur: options.largeur || etat.largeur }, options.environnement);
     const png = toile.toDataURL('image/png');
     const donnees = png.slice(png.indexOf(',') + 1);
 
-    return etat.transport === 'pont'
-        ? envoyerParPont(donnees, { avance: options.avance, delai: options.delai })
-        : envoyerAuServeur(donnees, { port: options.port, avance: options.avance, delai: options.delai });
+    const envoi: OptionsEnvoi = { avance: options.avance, support: options.support, copies: options.copies, delai: options.delai };
+    return etat.transport === 'pont' ? envoyerParPont(donnees, envoi) : envoyerAuServeur(donnees, { ...envoi, port: options.port });
 }
 
 /**

@@ -39,6 +39,7 @@ export function dessinerRecu(recu_1) {
         const largeur = options.largeur || LARGEUR_58MM;
         const marge = options.marge === undefined ? 4 : options.marge;
         const seuil = options.seuil === undefined ? 160 : options.seuil;
+        const noirEtBlanc = options.noirEtBlanc !== false;
         const famille = yield env.famille();
         const sources = recu.blocs.filter((b) => b.type === 'image').map((b) => b.source);
         const images = new Map();
@@ -66,17 +67,19 @@ export function dessinerRecu(recu_1) {
         ctx.fillStyle = '#000';
         ctx.textBaseline = 'alphabetic';
         for (const op of page.operations)
-            dessiner(ctx, op, images, env);
-        // Tout ce qui est gris — les bords lissés des lettres — devient noir ou
-        // blanc. Les images, déjà tramées, n'ont plus de gris : elles n'en sortent
-        // pas changées.
-        const pixels = ctx.getImageData(0, 0, page.largeur, page.hauteur);
-        seuillerRgba(pixels.data, seuil);
-        ctx.putImageData(pixels, 0, 0);
+            dessiner(ctx, op, images, env, noirEtBlanc);
+        if (noirEtBlanc) {
+            // Tout ce qui est gris — les bords lissés des lettres — devient noir
+            // ou blanc. Les images, déjà tramées, n'ont plus de gris : elles n'en
+            // sortent pas changées.
+            const pixels = ctx.getImageData(0, 0, page.largeur, page.hauteur);
+            seuillerRgba(pixels.data, seuil);
+            ctx.putImageData(pixels, 0, 0);
+        }
         return toile;
     });
 }
-function dessiner(ctx, op, images, env) {
+function dessiner(ctx, op, images, env, noirEtBlanc) {
     switch (op.type) {
         case 'texte':
             ctx.font = op.police;
@@ -97,6 +100,11 @@ function dessiner(ctx, op, images, env) {
             const image = images.get(op.source);
             if (!image)
                 return;
+            // Pour un écran : l'image telle quelle, à sa place.
+            if (!noirEtBlanc) {
+                ctx.drawImage(image, op.x, op.y, op.largeur, op.hauteur);
+                return;
+            }
             // Redimensionnée avec lissage, puis réduite à du noir et blanc
             // point par point : la trame doit se faire à la taille finale.
             const tampon = env.creerToile(op.largeur, op.hauteur);

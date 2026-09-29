@@ -87,3 +87,35 @@ export function mire(options = {}) {
         ],
     };
 }
+/**
+ * Ce que voit le client pendant qu'on encaisse : le panier et le total, en
+ * grand — pour l'écran client (480 × 480), pas pour l'imprimante.
+ */
+export function ecranExemple() {
+    return {
+        blocs: [
+            { type: 'texte', texte: 'LE PALMIER', taille: 'titre', gras: true, alignement: 'centre' },
+            { type: 'separateur', style: 'plein' },
+            { type: 'ligne', gauche: 'Poulet braisé', droite: montant(6500, ''), taille: 'grande' },
+            { type: 'ligne', gauche: '2 × Régab 65 cl', droite: montant(3000, ''), taille: 'grande' },
+            { type: 'ligne', gauche: 'Jus de gingembre', droite: montant(1500, ''), taille: 'grande' },
+            { type: 'ligne', gauche: '2 × Brochettes', droite: montant(9000, ''), taille: 'grande' },
+            { type: 'separateur', style: 'double' },
+            { type: 'texte', texte: 'À PAYER', taille: 'grande', alignement: 'centre' },
+            { type: 'texte', texte: montant(20000), taille: 'titre', gras: true, alignement: 'centre' },
+            { type: 'espace' },
+            { type: 'texte', texte: 'Merci de votre visite !', alignement: 'centre' },
+        ],
+    };
+}
+/** Une étiquette d'article — pour le papier étiquette : nom, prix en grand, QR de la référence. */
+export function etiquetteExemple() {
+    return {
+        blocs: [
+            { type: 'texte', texte: 'Amortisseur avant G/D — LC Prado J12', gras: true, alignement: 'centre' },
+            { type: 'texte', texte: montant(45000), taille: 'titre', gras: true, alignement: 'centre' },
+            { type: 'qr', donnees: 'BK341340', taille: 120 },
+            { type: 'texte', texte: 'BK341340', taille: 'petite', alignement: 'centre' },
+        ],
+    };
+}

@@ -1,8 +1,5 @@
 package com.derricknoutais.ecoprint
 
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.util.Base64
 import android.util.Log
 import android.webkit.JavascriptInterface
 import org.json.JSONException
@@ -35,18 +32,13 @@ class PontImpression(private val activite: MainActivity, private val app: EcoPri
         Log.i(JOURNAL, "pont : imprimer $id (${pngBase64.length} caractères)")
         if (!activite.pageDeConfiance()) return repondre(id, refus().put("ok", false))
 
-        val avance = try {
-            JSONObject(options).optInt("avance", 3)
+        val demande = try {
+            Protocole.options(JSONObject(options))
         } catch (e: JSONException) {
-            3
-        }.coerceIn(0, 20)
-
-        val image: Bitmap = try {
-            val octets = Base64.decode(pngBase64, Base64.DEFAULT)
-            BitmapFactory.decodeByteArray(octets, 0, octets.size)
-        } catch (e: IllegalArgumentException) {
-            null
-        } ?: return repondre(id, JSONObject().put("ok", false).put("code", "image").put("message", "Image du reçu illisible."))
+            Protocole.options(null)
+        }
+        val image = Protocole.image(pngBase64)
+            ?: return repondre(id, Protocole.echec("image", "Image du reçu illisible."))
 
         if (app.simulation) {
             // Aucune imprimante reconnue : on montre le reçu au lieu de l'imprimer.
@@ -54,7 +46,24 @@ class PontImpression(private val activite: MainActivity, private val app: EcoPri
             return repondre(id, JSONObject().put("ok", true).put("simulation", true))
         }
 
-        app.pilote.imprimer(image, avance) { resultat -> repondre(id, resultat) }
+        app.pilote.imprimer(image, demande) { resultat -> repondre(id, resultat) }
+    }
+
+    /** Affiche une image sur l'écran client du terminal. */
+    @JavascriptInterface
+    fun afficher(id: String, pngBase64: String) {
+        Log.i(JOURNAL, "pont : afficher $id (${pngBase64.length} caractères)")
+        if (!activite.pageDeConfiance()) return repondre(id, refus().put("ok", false))
+        val image = Protocole.image(pngBase64)
+            ?: return repondre(id, Protocole.echec("image", "Image de l'écran client illisible."))
+        app.pilote.afficher(image) { resultat -> repondre(id, resultat) }
+    }
+
+    /** Efface l'écran client. */
+    @JavascriptInterface
+    fun effacer(id: String) {
+        if (!activite.pageDeConfiance()) return repondre(id, refus().put("ok", false))
+        app.pilote.afficher(null) { resultat -> repondre(id, resultat) }
     }
 
     private fun repondre(id: String, resultat: JSONObject) {
@@ -69,7 +78,7 @@ class PontImpression(private val activite: MainActivity, private val app: EcoPri
 
     companion object {
         /** Doit rester égale à VERSION_PONT dans src/pont.ts. */
-        const val VERSION = "1"
+        const val VERSION = Protocole.VERSION
         private const val JOURNAL = "EcoPrint"
     }
 }

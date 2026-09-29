@@ -1,4 +1,4 @@
-import { ErreurImpression, lireEtat, lireVerdict, type EtatImprimante, type ResultatImpression } from './etat.ts';
+import { ErreurImpression, lireEtat, lireVerdict, type EtatImprimante, type OptionsEnvoi, type ResultatImpression } from './etat.ts';
 
 /**
  * Le service local : la page est ouverte dans le NAVIGATEUR du terminal, et
@@ -46,26 +46,45 @@ export async function etatServeur(options: OptionsServeur = {}): Promise<EtatImp
 }
 
 /**
- * Envoie l'image PNG (base64) au service. Se résout quand le reçu est sorti,
- * se rejette avec une `ErreurImpression` sinon.
+ * Envoie l'image PNG (base64) à imprimer. Se résout quand le reçu — ou la
+ * dernière étiquette — est sorti, se rejette avec une `ErreurImpression` sinon.
  */
-export async function envoyerAuServeur(
-    pngBase64: string,
-    options: { port?: number | false; avance?: number; delai?: number } = {},
-): Promise<ResultatImpression> {
-    if (options.port === false) throw new ErreurImpression('absente', 'Service d’impression désactivé.');
-    const port = options.port || PORT_PAR_DEFAUT;
-    const delai = options.delai || 65000;
+export function envoyerAuServeur(pngBase64: string, options: OptionsServeur & OptionsEnvoi = {}): Promise<ResultatImpression> {
+    return poster(
+        '/imprimer',
+        {
+            image: pngBase64,
+            avance: options.avance === undefined ? 3 : options.avance,
+            support: options.support || 'recu',
+            copies: options.copies || 1,
+        },
+        options.port,
+        options.delai || 65000,
+    );
+}
+
+/** Affiche une image PNG (base64) sur l'écran client — ou l'efface si elle vaut `null`. */
+export function afficherAuServeur(pngBase64: string | null, options: OptionsServeur & { delai?: number } = {}): Promise<ResultatImpression> {
+    return poster(
+        pngBase64 === null ? '/effacer' : '/afficher',
+        pngBase64 === null ? {} : { image: pngBase64 },
+        options.port,
+        options.delai || 15000,
+    );
+}
+
+async function poster(chemin: string, corps: object, port: number | false | undefined, delai: number): Promise<ResultatImpression> {
+    if (port === false) throw new ErreurImpression('absente', 'Service d’impression désactivé.');
 
     let reponse: Response;
     try {
         reponse = await avecDelai(
-            fetch(adresse(port, '/imprimer'), {
+            fetch(adresse(port || PORT_PAR_DEFAUT, chemin), {
                 method: 'POST',
                 // text/plain : une requête « simple », sans pré-vérification CORS
                 // — un aller-retour de moins. Le service lit le JSON quand même.
                 headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-                body: JSON.stringify({ image: pngBase64, avance: options.avance === undefined ? 3 : options.avance }),
+                body: JSON.stringify(corps),
             }),
             delai,
         );
@@ -74,13 +93,18 @@ export async function envoyerAuServeur(
         throw new ErreurImpression('absente', "Le service d'impression ne répond plus : l'application EcoPrint est-elle ouverte ?");
     }
 
-    let corps: unknown;
+    // Une application antérieure au protocole 2 ne connaît pas l'écran client.
+    if (reponse.status === 404) {
+        throw new ErreurImpression('non-pris-en-charge', "Cette version d'EcoPrint ne sait pas faire cela : la mettre à jour.");
+    }
+
+    let reponseJson: unknown;
     try {
-        corps = await reponse.json();
+        reponseJson = await reponse.json();
     } catch {
         throw new ErreurImpression('erreur', `Réponse illisible du service d'impression (HTTP ${reponse.status}).`);
     }
-    return lireVerdict(corps);
+    return lireVerdict(reponseJson);
 }
 
 /**

@@ -1,8 +1,9 @@
 export type { Alignement, Bloc, BlocEspace, BlocImage, BlocLigne, BlocQr, BlocSeparateur, BlocTexte, Recu, Taille, } from './document.ts';
 export { dessinerRecu, environnementNavigateur, type Environnement, type ImageChargee, type OptionsDessin, type Toile } from './dessin.ts';
 export { rasterEscPos, versEscPos } from './escpos.ts';
-export { ErreurImpression, type CodeEtat, type EtatImprimante, type ResultatImpression, type Transport } from './etat.ts';
-export { mire, recuExemple } from './exemples.ts';
+export { afficherClient, dessinerEcran, effacerClient, type OptionsEcran } from './ecran.ts';
+export { ErreurImpression, type Capacites, type CodeEtat, type EtatImprimante, type FormatEcran, type OptionsEnvoi, type ResultatImpression, type Transport, } from './etat.ts';
+export { ecranExemple, etiquetteExemple, mire, recuExemple } from './exemples.ts';
 export { apercuRecu, etatImprimante, imprimerRecu, type OptionsImpression } from './imprimer.ts';
 export { LARGEUR_58MM, LARGEUR_80MM, TAILLES } from './metriques.ts';
 export { montant } from './montant.ts';

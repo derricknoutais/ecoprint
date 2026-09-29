@@ -1,12 +1,8 @@
 import type { Recu } from './document.ts';
 import { type Environnement, type OptionsDessin, type Toile } from './dessin.ts';
-import { type EtatImprimante, type ResultatImpression } from './etat.ts';
+import { type EtatImprimante, type OptionsEnvoi, type ResultatImpression } from './etat.ts';
 import { type OptionsServeur } from './serveur.ts';
-export interface OptionsImpression extends OptionsDessin, OptionsServeur {
-    /** Lignes de papier avancées après le reçu, pour le détacher à la barre ; 3 par défaut. */
-    avance?: number;
-    /** Attente maximale du verdict de l'imprimante, en ms ; 60 000 par défaut. */
-    delai?: number;
+export interface OptionsImpression extends OptionsDessin, OptionsServeur, OptionsEnvoi {
     /** Où dessiner, hors navigateur : les tests passent celui de Node. */
     environnement?: Environnement;
 }

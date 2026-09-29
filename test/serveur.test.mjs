@@ -68,7 +68,7 @@ test('l’image part en POST text/plain — pas de pré-vérification CORS — e
     assert.equal(url, 'http://127.0.0.1:17321/imprimer');
     assert.equal(init.method, 'POST');
     assert.equal(init.headers['Content-Type'], 'text/plain;charset=UTF-8');
-    assert.deepEqual(JSON.parse(init.body), { image: 'iVBORw0KGgo=', avance: 3 });
+    assert.deepEqual(JSON.parse(init.body), { image: 'iVBORw0KGgo=', avance: 3, support: 'recu', copies: 1 });
 });
 
 test('un échec de l’imprimante rejette avec son code', async () => {

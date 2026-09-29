@@ -8,6 +8,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 import { defineComponent, h, onMounted, ref, watch } from 'vue';
+import { ErreurImpression } from "./etat.js";
+import { afficherClient, effacerClient } from "./ecran.js";
 import { apercuRecu, etatImprimante, imprimerRecu } from "./imprimer.js";
 /**
  * Imprimer depuis un composant Vue 3.
@@ -53,6 +55,59 @@ export function useImprimante(options = {}) {
     if (options.detecterAuMontage)
         onMounted(() => detecter().catch(() => undefined));
     return { etat, enCours, erreur, imprimer, detecter };
+}
+/**
+ * L'écran client depuis un composant Vue 3 : `afficher(contenu)` montre le
+ * panier, le total, un QR… — les mêmes blocs qu'un reçu —, `effacer()` le vide.
+ *
+ * Fait pour être appelé à chaque changement du panier : les demandes passent
+ * une à une, et seule la plus récente est envoyée — un écran ne montre jamais
+ * un panier plus ancien que le dernier. Sans écran client (terminal sans second
+ * écran, navigateur de bureau), ce n'est pas une erreur : `disponible` passe à
+ * `false` et les appels suivants ne coûtent plus rien — pas même une requête
+ * vers le service local, qu'un Chrome de bureau ferait valider à l'utilisateur.
+ */
+export function useEcranClient(options = {}) {
+    const disponible = ref(null);
+    const enCours = ref(false);
+    const erreur = ref(null);
+    let file = Promise.resolve();
+    let derniere = 0;
+    function executer(action) {
+        const moi = ++derniere;
+        const resultat = file.then(() => __awaiter(this, void 0, void 0, function* () {
+            if (moi !== derniere || disponible.value === false)
+                return false;
+            enCours.value = true;
+            try {
+                yield action();
+                disponible.value = true;
+                erreur.value = null;
+                return true;
+            }
+            catch (e) {
+                if (e instanceof ErreurImpression && (e.code === 'non-pris-en-charge' || e.code === 'absente')) {
+                    disponible.value = false;
+                }
+                else {
+                    erreur.value = e instanceof Error ? e.message : String(e);
+                }
+                return false;
+            }
+            finally {
+                enCours.value = false;
+            }
+        }));
+        file = resultat;
+        return resultat;
+    }
+    return {
+        disponible,
+        enCours,
+        erreur,
+        afficher: (contenu) => executer(() => afficherClient(contenu, options)),
+        effacer: () => executer(() => effacerClient(options)),
+    };
 }
 /**
  * L'aperçu d'un reçu, pixel pour pixel ce qui sortira de l'imprimante.

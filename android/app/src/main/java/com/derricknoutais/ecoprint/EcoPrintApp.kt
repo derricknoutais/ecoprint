@@ -14,8 +14,11 @@ class EcoPrintApp : Application() {
     /** Le pilote du terminal, reconnu une fois pour toutes au premier usage. */
     val pilote: Pilote by lazy { Pilotes.choisir(this) }
 
-    /** L'état de l'imprimante, avec le pilote choisi et le terminal reconnu. */
-    fun etat(): JSONObject = pilote.etat().put("pilote", pilote.nom).put("terminal", Pilotes.terminal())
+    /** L'état de l'imprimante, avec le pilote choisi, le terminal reconnu et ce qu'il sait faire. */
+    fun etat(): JSONObject = pilote.etat()
+        .put("pilote", pilote.nom)
+        .put("terminal", Pilotes.terminal())
+        .put("capacites", pilote.capacites())
 
     val simulation: Boolean get() = pilote.nom == PiloteSimulation.SIMULATION
 }

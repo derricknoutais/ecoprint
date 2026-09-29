@@ -37,6 +37,12 @@ export interface OptionsDessin {
      * lettres s'épaississent ; plus bas, elles s'affinent.
      */
     seuil?: number;
+    /**
+     * Vrai par défaut : l'image est réduite au noir et blanc de la tête
+     * thermique. Faux pour un écran : le texte garde ses bords lissés, les
+     * images leurs nuances.
+     */
+    noirEtBlanc?: boolean;
 }
 
 export function environnementNavigateur(): Environnement {
@@ -66,6 +72,7 @@ export async function dessinerRecu(recu: Recu, options: OptionsDessin = {}, env:
     const largeur = options.largeur || LARGEUR_58MM;
     const marge = options.marge === undefined ? 4 : options.marge;
     const seuil = options.seuil === undefined ? 160 : options.seuil;
+    const noirEtBlanc = options.noirEtBlanc !== false;
 
     const famille = await env.famille();
 
@@ -97,19 +104,21 @@ export async function dessinerRecu(recu: Recu, options: OptionsDessin = {}, env:
     ctx.fillStyle = '#000';
     ctx.textBaseline = 'alphabetic';
 
-    for (const op of page.operations) dessiner(ctx, op, images, env);
+    for (const op of page.operations) dessiner(ctx, op, images, env, noirEtBlanc);
 
-    // Tout ce qui est gris — les bords lissés des lettres — devient noir ou
-    // blanc. Les images, déjà tramées, n'ont plus de gris : elles n'en sortent
-    // pas changées.
-    const pixels = ctx.getImageData(0, 0, page.largeur, page.hauteur);
-    seuillerRgba(pixels.data, seuil);
-    ctx.putImageData(pixels, 0, 0);
+    if (noirEtBlanc) {
+        // Tout ce qui est gris — les bords lissés des lettres — devient noir
+        // ou blanc. Les images, déjà tramées, n'ont plus de gris : elles n'en
+        // sortent pas changées.
+        const pixels = ctx.getImageData(0, 0, page.largeur, page.hauteur);
+        seuillerRgba(pixels.data, seuil);
+        ctx.putImageData(pixels, 0, 0);
+    }
 
     return toile;
 }
 
-function dessiner(ctx: CanvasRenderingContext2D, op: Operation, images: Map<string, ImageChargee>, env: Environnement): void {
+function dessiner(ctx: CanvasRenderingContext2D, op: Operation, images: Map<string, ImageChargee>, env: Environnement, noirEtBlanc: boolean): void {
     switch (op.type) {
         case 'texte':
             ctx.font = op.police;
@@ -131,6 +140,12 @@ function dessiner(ctx: CanvasRenderingContext2D, op: Operation, images: Map<stri
         case 'image': {
             const image = images.get(op.source);
             if (!image) return;
+
+            // Pour un écran : l'image telle quelle, à sa place.
+            if (!noirEtBlanc) {
+                ctx.drawImage(image, op.x, op.y, op.largeur, op.hauteur);
+                return;
+            }
 
             // Redimensionnée avec lissage, puis réduite à du noir et blanc
             // point par point : la trame doit se faire à la taille finale.

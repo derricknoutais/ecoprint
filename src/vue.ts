@@ -1,6 +1,7 @@
 import { defineComponent, h, onMounted, ref, watch, type PropType, type Ref } from 'vue';
 import type { Recu } from './document.ts';
-import type { EtatImprimante } from './etat.ts';
+import { ErreurImpression, type EtatImprimante } from './etat.ts';
+import { afficherClient, effacerClient, type OptionsEcran } from './ecran.ts';
 import { apercuRecu, etatImprimante, imprimerRecu, type OptionsImpression } from './imprimer.ts';
 import type { OptionsServeur } from './serveur.ts';
 
@@ -53,6 +54,67 @@ export function useImprimante(options: OptionsServeur & { detecterAuMontage?: bo
     if (options.detecterAuMontage) onMounted(() => detecter().catch(() => undefined));
 
     return { etat, enCours, erreur, imprimer, detecter };
+}
+
+/**
+ * L'écran client depuis un composant Vue 3 : `afficher(contenu)` montre le
+ * panier, le total, un QR… — les mêmes blocs qu'un reçu —, `effacer()` le vide.
+ *
+ * Fait pour être appelé à chaque changement du panier : les demandes passent
+ * une à une, et seule la plus récente est envoyée — un écran ne montre jamais
+ * un panier plus ancien que le dernier. Sans écran client (terminal sans second
+ * écran, navigateur de bureau), ce n'est pas une erreur : `disponible` passe à
+ * `false` et les appels suivants ne coûtent plus rien — pas même une requête
+ * vers le service local, qu'un Chrome de bureau ferait valider à l'utilisateur.
+ */
+export function useEcranClient(options: OptionsEcran = {}): {
+    /** `null` tant qu'on n'a rien affiché, puis s'il y a un écran client joignable. */
+    disponible: Ref<boolean | null>;
+    enCours: Ref<boolean>;
+    /** Message de la dernière erreur ; `null` après un succès. */
+    erreur: Ref<string | null>;
+    /** Se résout à `true` si l'écran affiche ce contenu ; `false` sinon, ou s'il a été remplacé par un plus récent avant d'être envoyé. */
+    afficher: (contenu: Recu) => Promise<boolean>;
+    effacer: () => Promise<boolean>;
+} {
+    const disponible = ref<boolean | null>(null);
+    const enCours = ref(false);
+    const erreur = ref<string | null>(null);
+    let file: Promise<unknown> = Promise.resolve();
+    let derniere = 0;
+
+    function executer(action: () => Promise<void>): Promise<boolean> {
+        const moi = ++derniere;
+        const resultat = file.then(async () => {
+            if (moi !== derniere || disponible.value === false) return false;
+            enCours.value = true;
+            try {
+                await action();
+                disponible.value = true;
+                erreur.value = null;
+                return true;
+            } catch (e) {
+                if (e instanceof ErreurImpression && (e.code === 'non-pris-en-charge' || e.code === 'absente')) {
+                    disponible.value = false;
+                } else {
+                    erreur.value = e instanceof Error ? e.message : String(e);
+                }
+                return false;
+            } finally {
+                enCours.value = false;
+            }
+        });
+        file = resultat;
+        return resultat;
+    }
+
+    return {
+        disponible,
+        enCours,
+        erreur,
+        afficher: (contenu) => executer(() => afficherClient(contenu, options)),
+        effacer: () => executer(() => effacerClient(options)),
+    };
 }
 
 /**

@@ -121,9 +121,18 @@ class AccueilActivity : Activity() {
             "Terminal : ${imprimante.optString("terminal")} — pilote ${imprimante.optString("pilote")}",
             "Imprimante : ${imprimante.optString("message")}" + (imprimante.optString("modele").takeIf { it.isNotEmpty() }?.let { " ($it)" } ?: ""),
             "Papier : ${imprimante.optInt("largeur")} points (${if (imprimante.optInt("largeur") >= 576) "80" else "58"} mm)",
+            capacites(imprimante.optJSONObject("capacites")),
             service,
             if (origines.isEmpty()) "Aucune adresse autorisée : aucune page ne peut imprimer." else "Autorisées : ${origines.joinToString(", ")}",
         ).joinToString("\n")
+    }
+
+    /** « Massicot : oui — Étiquettes : à l'essai — Écran client : 480 × 480 ». */
+    private fun capacites(c: org.json.JSONObject?): String {
+        if (c == null) return "Capacités : inconnues"
+        val etiquettes = if (c.isNull("etiquettes")) "à l'essai" else if (c.optBoolean("etiquettes")) "oui" else "non"
+        val ecran = c.optJSONObject("afficheur")?.let { "${it.optInt("largeur")} × ${it.optInt("hauteur")}" } ?: "non"
+        return "Massicot : ${if (c.optBoolean("massicot")) "oui" else "non"} — Étiquettes : $etiquettes — Écran client : $ecran"
     }
 
     private fun titre(texte: String) = TextView(this).apply {

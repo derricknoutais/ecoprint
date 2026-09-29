@@ -53,7 +53,7 @@ test('l’impression se résout quand l’application annonce le reçu sorti', a
     assert.deepEqual(resultat, { simulation: false });
     assert.equal(appels.length, 1);
     assert.equal(appels[0].png, 'iVBORw0KGgo=');
-    assert.deepEqual(appels[0].options, { avance: 3 });
+    assert.deepEqual(appels[0].options, { avance: 3, support: 'recu', copies: 1 });
 });
 
 test('un échec de l’imprimante rejette avec son code et son message', async () => {

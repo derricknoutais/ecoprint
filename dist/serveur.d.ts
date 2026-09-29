@@ -1,4 +1,4 @@
-import { type EtatImprimante, type ResultatImpression } from './etat.ts';
+import { type EtatImprimante, type OptionsEnvoi, type ResultatImpression } from './etat.ts';
 /**
  * Le service local : la page est ouverte dans le NAVIGATEUR du terminal, et
  * l'application EcoPrint, en service de fond, écoute sur 127.0.0.1.
@@ -26,11 +26,11 @@ export interface OptionsServeur {
  */
 export declare function etatServeur(options?: OptionsServeur): Promise<EtatImprimante | null>;
 /**
- * Envoie l'image PNG (base64) au service. Se résout quand le reçu est sorti,
- * se rejette avec une `ErreurImpression` sinon.
+ * Envoie l'image PNG (base64) à imprimer. Se résout quand le reçu — ou la
+ * dernière étiquette — est sorti, se rejette avec une `ErreurImpression` sinon.
  */
-export declare function envoyerAuServeur(pngBase64: string, options?: {
-    port?: number | false;
-    avance?: number;
+export declare function envoyerAuServeur(pngBase64: string, options?: OptionsServeur & OptionsEnvoi): Promise<ResultatImpression>;
+/** Affiche une image PNG (base64) sur l'écran client — ou l'efface si elle vaut `null`. */
+export declare function afficherAuServeur(pngBase64: string | null, options?: OptionsServeur & {
     delai?: number;
 }): Promise<ResultatImpression>;

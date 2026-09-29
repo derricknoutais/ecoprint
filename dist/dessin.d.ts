@@ -31,6 +31,12 @@ export interface OptionsDessin {
      * lettres s'épaississent ; plus bas, elles s'affinent.
      */
     seuil?: number;
+    /**
+     * Vrai par défaut : l'image est réduite au noir et blanc de la tête
+     * thermique. Faux pour un écran : le texte garde ses bords lissés, les
+     * images leurs nuances.
+     */
+    noirEtBlanc?: boolean;
 }
 export declare function environnementNavigateur(): Environnement;
 export declare function dessinerRecu(recu: Recu, options?: OptionsDessin, env?: Environnement): Promise<Toile>;
