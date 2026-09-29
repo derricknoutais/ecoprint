@@ -31,3 +31,6 @@ include(":pilote-sunmi")
 project(":pilote-sunmi").projectDir = file("../../sunmi-print/android/pilote")
 include(":pilote-zcs")
 project(":pilote-zcs").projectDir = file("../../zcs-print/android/pilote")
+// Le SDK du fabricant, dont le pilote ZCS dépend, vit dans le même dépôt que lui.
+include(":sdk-zcs")
+project(":sdk-zcs").projectDir = file("../../zcs-print/android/sdk")
