@@ -49,7 +49,7 @@ Au démarrage, EcoPrint essaie les pilotes : ZCS d'abord (il ne se déclare que 
 ### JavaScript
 
 ```bash
-npm install github:derricknoutais/ecoprint#v0.1.0
+npm install github:derricknoutais/ecoprint#v0.2.0
 ```
 
 En développement, à côté du projet : `npm install ../ecoprint`.

@@ -12,8 +12,8 @@ android {
         // Le Sunmi V2 Pro tourne sous Android 7.1 (API 25) ; le ZCS Z92S sous Android 16.
         minSdk = 24
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.2.0-beta.3"
+        versionCode = 5
+        versionName = "0.2.0"
     }
 
     buildFeatures {

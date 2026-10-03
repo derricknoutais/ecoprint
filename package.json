@@ -1,6 +1,6 @@
 {
     "name": "@derricknoutais/ecoprint",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "description": "Imprimer des reçus sur les terminaux Android à imprimante intégrée — Sunmi, ZCS — depuis une application web : rendu du reçu en image dans la page, impression par l'application EcoPrint. Compatible avec les WebView anciens des terminaux (Chrome 62).",
     "type": "module",
     "private": true,
