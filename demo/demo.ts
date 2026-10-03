@@ -8,6 +8,7 @@ import {
     afficherClient,
     apercuRecu,
     ecranExemple,
+    ecranLcdExemple,
     effacerClient,
     ErreurImpression,
     etatImprimante,
@@ -61,7 +62,7 @@ async function afficherEtat(): Promise<void> {
     const c = etat.capacites;
     element('capacites').textContent = !c
         ? '—'
-        : `massicot ${ouiNon(c.massicot)} · étiquettes ${ouiNon(c.etiquettes)} · tiroir ${ouiNon(c.tiroir)} · écran client ${c.afficheur ? `${c.afficheur.largeur} × ${c.afficheur.hauteur}` : 'non'}`;
+        : `massicot ${ouiNon(c.massicot)} · étiquettes ${ouiNon(c.etiquettes)} · tiroir ${ouiNon(c.tiroir)} · écran client ${c.afficheur ? `${c.afficheur.largeur} × ${c.afficheur.hauteur}${c.afficheur.monochrome ? ' noir et blanc' : ''}` : 'non'}`;
 }
 
 function ouiNon(valeur: boolean | null): string {
@@ -135,7 +136,14 @@ function essayer(bouton: string, action: () => Promise<unknown>, succes: string)
 }
 
 essayer('etiquette', () => imprimerRecu(etiquetteExemple(), { support: 'etiquette', copies: 1 }), 'Étiquette imprimée');
-essayer('ecran', () => afficherClient(ecranExemple()), 'Écran client affiché');
+essayer(
+    'ecran',
+    () => {
+        const format = dernierEtat && dernierEtat.capacites ? dernierEtat.capacites.afficheur : null;
+        return afficherClient(format && format.monochrome ? ecranLcdExemple() : ecranExemple());
+    },
+    'Écran client affiché',
+);
 essayer('effacer', () => effacerClient(), 'Écran client effacé');
 essayer('tiroir', () => ouvrirTiroir(), 'Tiroir-caisse ouvert');
 

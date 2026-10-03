@@ -2,7 +2,7 @@ export { dessinerRecu, environnementNavigateur } from "./dessin.js";
 export { rasterEscPos, tiroirEscPos, versEscPos } from "./escpos.js";
 export { afficherClient, dessinerEcran, effacerClient } from "./ecran.js";
 export { ErreurImpression, } from "./etat.js";
-export { ecranExemple, etiquetteExemple, mire, recuExemple } from "./exemples.js";
+export { ecranExemple, ecranLcdExemple, etiquetteExemple, mire, recuExemple } from "./exemples.js";
 export { apercuRecu, etatImprimante, imprimerRecu, ouvrirTiroir } from "./imprimer.js";
 export { LARGEUR_58MM, LARGEUR_80MM, TAILLES } from "./metriques.js";
 export { montant } from "./montant.js";

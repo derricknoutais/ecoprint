@@ -163,3 +163,47 @@ test('useEcranClient : seul le dernier panier part, et un terminal sans écran n
     assert.equal(await autre.afficher(panier(2)), false);
     assert.equal(appels2.length, avant);
 });
+
+test('les capacités disent si l’écran client est un LCD noir et blanc', async () => {
+    const { lireEtat } = await import('../dist/etat.js');
+    const afficheur = (a) => lireEtat({ code: 'prete', capacites: { massicot: true, afficheur: a } }, 'serveur').capacites.afficheur;
+    assert.deepEqual(afficheur({ largeur: 128, hauteur: 64, monochrome: true }), { largeur: 128, hauteur: 64, monochrome: true });
+    assert.deepEqual(afficheur({ largeur: 480, hauteur: 480, monochrome: false }), { largeur: 480, hauteur: 480 });
+    // Une application d'avant le LCD ne dit rien : un écran couleur.
+    assert.deepEqual(afficheur({ largeur: 480, hauteur: 480 }), { largeur: 480, hauteur: 480 });
+});
+
+test('sur un LCD de 128 × 64 : noir et blanc pur, et le montant tient sur une ligne', async () => {
+    const { ecranLcdExemple } = await import('../dist/exemples.js');
+    const toile = await dessinerEcran(ecranLcdExemple(), { largeur: 128, hauteur: 64, monochrome: true }, env);
+    garderApercu('ecran-lcd', toile);
+    assert.equal(toile.width, 128);
+    assert.equal(toile.height, 64);
+
+    const g = gris(toile);
+    assert.equal(g.filter((v) => v !== 0 && v !== 255).length, 0, 'des gris restent : le LCD les rendrait mal');
+
+    // Deux lignes de texte, pas trois : « 20 000 FCFA » n'a pas été coupé en deux.
+    // Un blanc de moins de 3 points (l'accent de « À ») ne sépare pas deux lignes.
+    const encrees = [];
+    for (let y = 0; y < 64; y++) encrees.push(g.subarray(y * 128, (y + 1) * 128).some((v) => v === 0));
+    let lignes = 0;
+    let blanc = Infinity;
+    for (let y = 0; y < 64; y++) {
+        if (!encrees[y]) blanc++;
+        else {
+            if (blanc >= 3) lignes++;
+            blanc = 0;
+        }
+    }
+    assert.equal(lignes, 2);
+});
+
+test('afficherClient dessine pour le LCD quand le terminal en a un', async () => {
+    const lcd = { ...ETAT_ZCS, capacites: { ...ETAT_ZCS.capacites, afficheur: { largeur: 128, hauteur: 64, monochrome: true } } };
+    const appels = installerService((url) => (url.endsWith('/etat') ? reponse(200, lcd) : reponse(200, { ok: true })));
+    await afficherClient(ecranExemple(), { environnement: env });
+    const png = Buffer.from(appels.find((a) => a.url.endsWith('/afficher')).corps.image, 'base64');
+    assert.equal(png.readUInt32BE(16), 128);
+    assert.equal(png.readUInt32BE(20), 64);
+});

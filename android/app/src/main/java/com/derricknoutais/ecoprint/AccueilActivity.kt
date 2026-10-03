@@ -132,7 +132,9 @@ class AccueilActivity : Activity() {
         if (c == null) return "Capacités : inconnues"
         val etiquettes = if (c.isNull("etiquettes")) "à l'essai" else if (c.optBoolean("etiquettes")) "oui" else "non"
         val tiroir = if (c.isNull("tiroir")) "à l'essai" else if (c.optBoolean("tiroir")) "oui" else "non"
-        val ecran = c.optJSONObject("afficheur")?.let { "${it.optInt("largeur")} × ${it.optInt("hauteur")}" } ?: "non"
+        val ecran = c.optJSONObject("afficheur")?.let {
+            "${it.optInt("largeur")} × ${it.optInt("hauteur")}${if (it.optBoolean("monochrome")) " noir et blanc" else ""}"
+        } ?: "non"
         return "Massicot : ${if (c.optBoolean("massicot")) "oui" else "non"} — Étiquettes : $etiquettes — Tiroir-caisse : $tiroir — Écran client : $ecran"
     }
 

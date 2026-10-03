@@ -3,7 +3,7 @@ export { dessinerRecu, environnementNavigateur, type Environnement, type ImageCh
 export { rasterEscPos, tiroirEscPos, versEscPos, type OptionsEscPos } from './escpos.ts';
 export { afficherClient, dessinerEcran, effacerClient, type OptionsEcran } from './ecran.ts';
 export { ErreurImpression, type Capacites, type CodeEtat, type EtatImprimante, type FormatEcran, type OptionsEnvoi, type ResultatImpression, type ResultatTiroir, type Transport, } from './etat.ts';
-export { ecranExemple, etiquetteExemple, mire, recuExemple } from './exemples.ts';
+export { ecranExemple, ecranLcdExemple, etiquetteExemple, mire, recuExemple } from './exemples.ts';
 export { apercuRecu, etatImprimante, imprimerRecu, ouvrirTiroir, type OptionsImpression } from './imprimer.ts';
 export { LARGEUR_58MM, LARGEUR_80MM, TAILLES } from './metriques.ts';
 export { montant } from './montant.ts';

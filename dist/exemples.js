@@ -108,6 +108,18 @@ export function ecranExemple() {
         ],
     };
 }
+/**
+ * Pour un petit LCD noir et blanc (128 × 64) : deux lignes, lisibles de
+ * l'autre côté du comptoir. Le reste du panier n'y tiendrait pas.
+ */
+export function ecranLcdExemple() {
+    return {
+        blocs: [
+            { type: 'texte', texte: 'À PAYER', gras: true, alignement: 'centre' },
+            { type: 'texte', texte: montant(20000), taille: 'grande', gras: true, alignement: 'centre' },
+        ],
+    };
+}
 /** Une étiquette d'article — pour le papier étiquette : nom, prix en grand, QR de la référence. */
 export function etiquetteExemple() {
     return {

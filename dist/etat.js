@@ -28,7 +28,8 @@ function lireCapacites(brut) {
         massicot: c.massicot === true,
         etiquettes: troisEtats(c.etiquettes),
         tiroir: troisEtats(c.tiroir),
-        afficheur: a && Number(a.largeur) > 0 && Number(a.hauteur) > 0 ? { largeur: Number(a.largeur), hauteur: Number(a.hauteur) } : null,
+        afficheur: a && Number(a.largeur) > 0 && Number(a.hauteur) > 0
+            ? Object.assign({ largeur: Number(a.largeur), hauteur: Number(a.hauteur) }, (a.monochrome === true ? { monochrome: true } : {})) : null,
     };
 }
 /** `true`, `false`, ou `null` quand le pilote ne sait pas. */

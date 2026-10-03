@@ -24,7 +24,7 @@ export {
     type ResultatTiroir,
     type Transport,
 } from './etat.ts';
-export { ecranExemple, etiquetteExemple, mire, recuExemple } from './exemples.ts';
+export { ecranExemple, ecranLcdExemple, etiquetteExemple, mire, recuExemple } from './exemples.ts';
 export { apercuRecu, etatImprimante, imprimerRecu, ouvrirTiroir, type OptionsImpression } from './imprimer.ts';
 export { LARGEUR_58MM, LARGEUR_80MM, TAILLES } from './metriques.ts';
 export { montant } from './montant.ts';

@@ -27,6 +27,8 @@ export interface Capacites {
 export interface FormatEcran {
     largeur: number;
     hauteur: number;
+    /** Un petit LCD noir et blanc (128 × 64 sur le Z100), plutôt qu'un écran couleur. */
+    monochrome?: boolean;
 }
 export interface EtatImprimante {
     code: CodeEtat;

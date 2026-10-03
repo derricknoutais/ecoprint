@@ -9,31 +9,47 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 import { dessinerRecu, environnementNavigateur } from "./dessin.js";
 import { ErreurImpression } from "./etat.js";
+import { seuillerRgba } from "./tramage.js";
 import { etatImprimante } from "./imprimer.js";
 import { afficherParPont } from "./pont.js";
 import { afficherAuServeur } from "./serveur.js";
-/** Blanc gardé autour du contenu, en pixels. */
+/** Blanc gardé autour du contenu, en pixels de l'écran. */
 const MARGE = 16;
+const MARGE_LCD = 2;
+/**
+ * Un LCD de 128 points de large ne loge pas « 14 500 FCFA » dans la plus
+ * petite taille de texte : le contenu y est dessiné deux fois plus large,
+ * réduit en lissant, puis remis en noir et blanc — le texte reste net, deux
+ * fois plus petit.
+ */
+const SURECHANTILLONNAGE_LCD = 2;
 /**
  * Le contenu à la taille exacte de l'écran : dessiné à sa largeur, réduit
  * s'il est trop haut pour tenir — un client doit tout voir d'un coup —, et
- * centré.
+ * centré. Sur un LCD (`monochrome`), en noir et blanc pur.
  */
 export function dessinerEcran(contenu_1, format_1) {
     return __awaiter(this, arguments, void 0, function* (contenu, format, env = environnementNavigateur()) {
-        const page = yield dessinerRecu(contenu, { largeur: format.largeur, marge: MARGE, noirEtBlanc: false }, env);
+        const facteur = format.monochrome ? SURECHANTILLONNAGE_LCD : 1;
+        const marge = format.monochrome ? MARGE_LCD : MARGE;
+        const page = yield dessinerRecu(contenu, { largeur: format.largeur * facteur, marge: marge * facteur, noirEtBlanc: false }, env);
         const toile = env.creerToile(format.largeur, format.hauteur);
         const ctx = toile.getContext('2d');
         if (!ctx)
             throw new Error('Canvas 2D indisponible.');
         ctx.fillStyle = '#fff';
         ctx.fillRect(0, 0, format.largeur, format.hauteur);
-        const hauteurUtile = format.hauteur - 2 * MARGE;
-        const echelle = page.height > hauteurUtile ? hauteurUtile / page.height : 1;
+        const hauteurUtile = format.hauteur - 2 * marge;
+        const echelle = Math.min(1 / facteur, hauteurUtile / page.height);
         const largeur = Math.round(page.width * echelle);
         const hauteur = Math.round(page.height * echelle);
         ctx.imageSmoothingEnabled = true;
         ctx.drawImage(page, Math.round((format.largeur - largeur) / 2), Math.round((format.hauteur - hauteur) / 2), largeur, hauteur);
+        if (format.monochrome) {
+            const pixels = ctx.getImageData(0, 0, format.largeur, format.hauteur);
+            seuillerRgba(pixels.data, 128);
+            ctx.putImageData(pixels, 0, 0);
+        }
         return toile;
     });
 }

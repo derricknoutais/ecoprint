@@ -38,6 +38,8 @@ export interface Capacites {
 export interface FormatEcran {
     largeur: number;
     hauteur: number;
+    /** Un petit LCD noir et blanc (128 × 64 sur le Z100), plutôt qu'un écran couleur. */
+    monochrome?: boolean;
 }
 
 export interface EtatImprimante {
@@ -130,13 +132,21 @@ export function lireEtat(brut: unknown, transport: Transport): EtatImprimante {
 }
 
 function lireCapacites(brut: unknown): Capacites {
-    const c = (brut || {}) as { massicot?: unknown; etiquettes?: unknown; tiroir?: unknown; afficheur?: { largeur?: unknown; hauteur?: unknown } | null };
+    const c = (brut || {}) as {
+        massicot?: unknown;
+        etiquettes?: unknown;
+        tiroir?: unknown;
+        afficheur?: { largeur?: unknown; hauteur?: unknown; monochrome?: unknown } | null;
+    };
     const a = c.afficheur;
     return {
         massicot: c.massicot === true,
         etiquettes: troisEtats(c.etiquettes),
         tiroir: troisEtats(c.tiroir),
-        afficheur: a && Number(a.largeur) > 0 && Number(a.hauteur) > 0 ? { largeur: Number(a.largeur), hauteur: Number(a.hauteur) } : null,
+        afficheur:
+            a && Number(a.largeur) > 0 && Number(a.hauteur) > 0
+                ? { largeur: Number(a.largeur), hauteur: Number(a.hauteur), ...(a.monochrome === true ? { monochrome: true } : {}) }
+                : null,
     };
 }
 

@@ -15,7 +15,7 @@ Les pilotes d'imprimante vivent dans leurs propres dépôts, et EcoPrint les int
 | Dépôt | Terminaux | État |
 |---|---|---|
 | [sunmi-print](https://github.com/derricknoutais/sunmi-print) | Sunmi V2 Pro, V2s, P2, T2… — et les marques qui reprennent le service Sunmi | imprime (vérifié sur un V2 Pro) |
-| [zcs-print](https://github.com/derricknoutais/zcs-print) (privé) | ZCS Z90, Z91, Z92, Z100… | imprime (vérifié sur un Z92S), avec le SDK SmartPos de ZCS |
+| [zcs-print](https://github.com/derricknoutais/zcs-print) (privé) | ZCS Z90, Z91, Z92, Z100… — et les ZCS revendus sous une autre marque | imprime (vérifié sur un Z92S et un Z100), avec le SDK SmartPos de ZCS |
 
 ---
 
@@ -160,7 +160,7 @@ const { capacites } = await etatImprimante();
 | `massicot` | le reçu est coupé une fois sorti — rien à demander, EcoPrint le fait |
 | `etiquettes` | `false` : pas de papier étiquette (Sunmi) ; `null` : le pilote ne peut pas le savoir d'avance, c'est l'essai qui tranche (ZCS) |
 | `tiroir` | une prise de tiroir-caisse : `true` sur un Sunmi de comptoir (T…, D…), `false` sur un portable (V2 Pro…) ; `null` quand on ne peut pas le savoir d'avance — sur un ZCS (le SDK ne le dit pas), sur un Sunmi de modèle inconnu, ou avec une application EcoPrint antérieure au protocole 3 : c'est l'essai qui tranche |
-| `afficheur` | la taille de l'écran client, ou `null` s'il n'y en a pas |
+| `afficheur` | l'écran client — `{ largeur, hauteur }`, plus `monochrome: true` pour un petit LCD noir et blanc —, ou `null` s'il n'y en a pas |
 
 `capacites` est absent avec une application EcoPrint antérieure au protocole 2 : la mettre à jour. Avant le protocole 3, `tiroir` y vaut `null` ; l'essai répond alors `non-pris-en-charge`, avec un message qui demande la mise à jour.
 
@@ -217,7 +217,7 @@ Ouvrir la caisse sans vente est un geste à tracer : c'est à l'application de d
 
 ## L'écran client
 
-Sur un terminal à deux écrans, le petit écran tourné vers le client (480 × 480 sur les ZCS) affiche ce que la page veut — le panier, le total à payer, un QR de paiement, le logo — avec **les mêmes blocs qu'un reçu** :
+Sur un terminal à deux écrans, le petit écran tourné vers le client affiche ce que la page veut — le panier, le total à payer, un QR de paiement, le logo — avec **les mêmes blocs qu'un reçu** :
 
 ```ts
 import { afficherClient, effacerClient, montant } from '@derricknoutais/ecoprint';
@@ -238,6 +238,23 @@ await effacerClient(); // vente terminée : l'écran revient au blanc
 ```
 
 Le contenu est dessiné à la taille exacte de l'écran, en niveaux de gris (un écran n'est pas une tête thermique : les lettres gardent leurs bords lissés), centré, et réduit s'il est trop haut — le client voit tout d'un coup, rien n'est coupé. L'appeler à chaque article ajouté : l'image précédente est remplacée. Sans écran client, `afficherClient` se rejette avec `non-pris-en-charge` : l'appeler partout sans risque, et ignorer ce code.
+
+Il y a deux sortes d'écrans client, et `capacites.afficheur` dit lequel :
+
+| Écran | Format | Ce qui y tient |
+|---|---|---|
+| couleur (ZCS qui l'annoncent) | 480 × 480 | le panier entier, un QR, un logo |
+| **LCD noir et blanc** (ZCS Z100) | 128 × 64, `monochrome: true` | deux lignes courtes : « À PAYER », le montant |
+
+Sur le LCD, le contenu est dessiné deux fois plus grand puis réduit et remis en noir et blanc pur : « 20 000 FCFA » tient sur une ligne, net. Un panier entier y serait réduit jusqu'à l'illisible : afficher le total seul — `ecranLcdExemple()` en donne le modèle.
+
+```ts
+const { capacites } = await etatImprimante();
+await afficherClient(capacites?.afficheur?.monochrome
+    ? { blocs: [{ type: 'texte', texte: 'À PAYER', gras: true, alignement: 'centre' },
+                { type: 'texte', texte: montant(total), taille: 'grande', gras: true, alignement: 'centre' }] }
+    : panierComplet);
+```
 
 ## Vue 3
 
@@ -321,10 +338,22 @@ ZCS Z92S (Android 16, SDK SmartPos 2.0.9, 58 mm), le 29 septembre 2026, avec Eco
 | page de test dans l'application, pont direct | WebView 143 | reçu d'exemple imprimé (2,4 s), mire imprimée (3,0 s) |
 | page **https** dans le navigateur → `http://127.0.0.1:17321` | Chrome 143 | service détecté sans demande d'autorisation, reçu imprimé (2,2 s) |
 
+ZCS **Z100** revendu sous la marque SPEEDSTAR (« BETA COMPUTERS LIMITED StarTab-A324G », Android 13, système `Z100mbs_EU_A13_V1.0.5`), le 3 octobre 2026, par le service local :
+
+| Fonction | Résultat |
+|---|---|
+| reconnaissance | pilote `zcs`, malgré le fabricant annoncé : reconnu à `ro.zcs.platform.tag` |
+| reçu 80 mm (576 points) | imprimé, verdict en 1,1 s |
+| massicot | reçu coupé — le massicot répond « occupée » tant que le papier sort : le pilote réessaie (coupe au 3ᵉ essai, 0,9 s) |
+| tiroir-caisse | ouvert (`openBox()`) |
+| écran client | LCD 128 × 64 noir et blanc : « À PAYER / 20 000 FCFA » affiché, puis effacé |
+
 Les durées sont celles du verdict de l'imprimante, papier sorti.
+
+Le débogage USB d'un Z100 s'active par un **bouton à l'arrière** du terminal : sans lui, il ne se présente pas à l'ordinateur, même branché, même options pour les développeurs activées.
 
 ## Limites connues
 
-- **Massicot, étiquettes, 80 mm, écran client** (protocole 2) **et tiroir-caisse** (protocole 3) sont écrits d'après les SDK ZCS 2.0.9 et Sunmi, et testés hors terminal, mais pas encore sur un terminal qui les a : le Z92S et le V2 Pro sont des portables, sans massicot, prise de tiroir ni second écran.
+- **Vérifiés sur un Z100** : 80 mm, massicot, tiroir-caisse, LCD client. **Pas encore vérifiés** : les étiquettes (pas de rouleau d'étiquettes essayé), le grand écran client couleur (aucun terminal essayé n'en a), le tiroir-caisse sur un Sunmi de comptoir.
 - **Jeu latin seulement** : un caractère absent de la police embarquée (chinois, arabe…) est rendu par une police du système, ou pas du tout.
 - **Signature de développement** : l'APK est signé avec la clé de débogage du poste qui le construit. Une mise à jour construite ailleurs ne s'installera pas par-dessus : prévoir une clé de publication avant d'équiper plusieurs terminaux.

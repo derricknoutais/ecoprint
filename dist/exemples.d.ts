@@ -20,5 +20,10 @@ export declare function mire(options?: {
  * grand — pour l'écran client (480 × 480), pas pour l'imprimante.
  */
 export declare function ecranExemple(): Recu;
+/**
+ * Pour un petit LCD noir et blanc (128 × 64) : deux lignes, lisibles de
+ * l'autre côté du comptoir. Le reste du panier n'y tiendrait pas.
+ */
+export declare function ecranLcdExemple(): Recu;
 /** Une étiquette d'article — pour le papier étiquette : nom, prix en grand, QR de la référence. */
 export declare function etiquetteExemple(): Recu;
