@@ -2,8 +2,8 @@ import type { Recu } from './document.ts';
 import { dessinerRecu, type Environnement, type OptionsDessin, type Toile } from './dessin.ts';
 import { ErreurImpression, etatAbsente, type EtatImprimante, type OptionsEnvoi, type ResultatImpression } from './etat.ts';
 import { LARGEUR_58MM } from './metriques.ts';
-import { envoyerParPont, etatPont, pontDisponible } from './pont.ts';
-import { envoyerAuServeur, etatServeur, type OptionsServeur } from './serveur.ts';
+import { envoyerParPont, etatPont, ouvrirTiroirParPont, pontDisponible } from './pont.ts';
+import { envoyerAuServeur, etatServeur, ouvrirTiroirAuServeur, type OptionsServeur } from './serveur.ts';
 
 export interface OptionsImpression extends OptionsDessin, OptionsServeur, OptionsEnvoi {
     /** Où dessiner, hors navigateur : les tests passent celui de Node. */
@@ -23,6 +23,12 @@ export async function etatImprimante(options: OptionsServeur = {}): Promise<Etat
  * Dessine le reçu et l'imprime. Se résout quand il est sorti ; se rejette avec
  * une `ErreurImpression` dont le `code` dit quoi faire : `papier`, `capot`,
  * `surchauffe`, `refusee` (adresse à autoriser dans l'application), `absente`…
+ *
+ * Avec `tiroir: true`, le tiroir-caisse s'ouvre d'abord, puis le reçu sort ;
+ * le résultat dit dans `tiroir` s'il s'est ouvert. Un reçu refusé d'avance
+ * (plus de papier constaté avant l'envoi…) n'ouvre rien. Un reçu qui échoue
+ * chez le terminal (papier épuisé en cours de route…) a pu l'ouvrir : l'erreur
+ * le dit dans `tiroir`. N'appeler `ouvrirTiroir()` que s'il n'est pas ouvert.
  */
 export async function imprimerRecu(recu: Recu, options: OptionsImpression = {}): Promise<ResultatImpression> {
     // Vérifié AVANT de dessiner : inutile de faire attendre le caissier pour
@@ -39,8 +45,37 @@ export async function imprimerRecu(recu: Recu, options: OptionsImpression = {}):
     const png = toile.toDataURL('image/png');
     const donnees = png.slice(png.indexOf(',') + 1);
 
-    const envoi: OptionsEnvoi = { avance: options.avance, support: options.support, copies: options.copies, delai: options.delai };
-    return etat.transport === 'pont' ? envoyerParPont(donnees, envoi) : envoyerAuServeur(donnees, { ...envoi, port: options.port });
+    const envoi: OptionsEnvoi = { avance: options.avance, support: options.support, copies: options.copies, tiroir: options.tiroir, delai: options.delai };
+    const resultat = await (etat.transport === 'pont' ? envoyerParPont(donnees, envoi) : envoyerAuServeur(donnees, { ...envoi, port: options.port }));
+
+    // Une application antérieure au protocole 3 imprime sans rien dire du tiroir.
+    if (options.tiroir && !resultat.tiroir) {
+        resultat.tiroir = { ouvert: false, code: 'non-pris-en-charge', message: "Cette version d'EcoPrint ne pilote pas le tiroir-caisse : la mettre à jour." };
+    }
+    return resultat;
+}
+
+/**
+ * Ouvre le tiroir-caisse branché sur le terminal — sans reçu : vente sans
+ * ticket, rendu de monnaie… Se rejette avec une `ErreurImpression` :
+ * `non-pris-en-charge` si EcoPrint sait que le terminal n'a pas de prise
+ * (`capacites.tiroir === false` : Sunmi portable) ou si l'application est trop
+ * ancienne, `absente` hors terminal, `refusee` si l'adresse n'est pas
+ * autorisée. Quand `capacites.tiroir` vaut `null` (ZCS), le pilote ne peut pas
+ * savoir : un terminal sans prise rend `erreur`, ou réussit sans rien ouvrir.
+ *
+ * Ouvrir la caisse sans vente est un geste à tracer : c'est à l'application
+ * de dire qui y a droit, et de l'enregistrer.
+ */
+export async function ouvrirTiroir(options: OptionsServeur & { delai?: number } = {}): Promise<void> {
+    const etat = await etatImprimante(options);
+    if (!etat.transport || etat.code === 'refusee') throw new ErreurImpression(etat.code, etat.message);
+    if (etat.capacites && etat.capacites.tiroir === false) {
+        throw new ErreurImpression('non-pris-en-charge', "Ce terminal n'a pas de prise de tiroir-caisse.");
+    }
+    // Les transports rendent le verdict déjà lu : ils rejettent si le tiroir refuse.
+    if (etat.transport === 'pont') await ouvrirTiroirParPont({ delai: options.delai });
+    else await ouvrirTiroirAuServeur({ port: options.port, delai: options.delai });
 }
 
 /**

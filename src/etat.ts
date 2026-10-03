@@ -29,6 +29,8 @@ export interface Capacites {
     massicot: boolean;
     /** Papier étiquette accepté ; `null` quand le pilote ne peut pas le savoir d'avance (ZCS : l'essai tranche). */
     etiquettes: boolean | null;
+    /** Une prise de tiroir-caisse ; `null` quand le pilote ne peut pas le savoir d'avance. */
+    tiroir: boolean | null;
     /** L'écran tourné vers le client, s'il y en a un. */
     afficheur: FormatEcran | null;
 }
@@ -61,6 +63,8 @@ export interface OptionsEnvoi {
     support?: 'recu' | 'etiquette';
     /** Exemplaires d'une étiquette ; 1 par défaut. */
     copies?: number;
+    /** Ouvrir le tiroir-caisse avec ce reçu : il s'ouvre d'abord, puis le reçu sort aussitôt. */
+    tiroir?: boolean;
     /** Attente maximale du verdict, en ms. */
     delai?: number;
 }
@@ -68,15 +72,33 @@ export interface OptionsEnvoi {
 export interface ResultatImpression {
     /** Vrai si l'application tourne sans imprimante reconnue et n'a rien imprimé. */
     simulation: boolean;
+    /**
+     * Présent quand le reçu devait ouvrir le tiroir-caisse. Le reçu est sorti ;
+     * le tiroir, peut-être pas : un tiroir qui ne s'ouvre pas n'empêche pas le reçu.
+     */
+    tiroir?: ResultatTiroir;
+}
+
+export interface ResultatTiroir {
+    ouvert: boolean;
+    /** S'il ne s'est pas ouvert, pourquoi : `non-pris-en-charge`, `erreur`… */
+    code?: string;
+    message?: string;
 }
 
 /**
  * Une erreur du terminal. Son `code` : ceux de l'état (`papier`, `capot`…),
- * plus `delai`, `image`, et `non-pris-en-charge` — étiquettes ou écran client
- * que ce terminal, ou cette version de l'application, ne sait pas faire.
+ * plus `delai`, `image`, et `non-pris-en-charge` — étiquettes, tiroir-caisse
+ * ou écran client que ce terminal, ou cette version de l'application, ne sait
+ * pas faire.
  */
 export class ErreurImpression extends Error {
     readonly code: string;
+    /**
+     * Pour un reçu avec `tiroir: true` que le terminal n'a pas imprimé : le
+     * tiroir s'ouvre avant le reçu, il a donc pu s'ouvrir quand même.
+     */
+    tiroir?: ResultatTiroir;
 
     constructor(code: string, message: string) {
         super(message);
@@ -108,18 +130,49 @@ export function lireEtat(brut: unknown, transport: Transport): EtatImprimante {
 }
 
 function lireCapacites(brut: unknown): Capacites {
-    const c = (brut || {}) as { massicot?: unknown; etiquettes?: unknown; afficheur?: { largeur?: unknown; hauteur?: unknown } | null };
+    const c = (brut || {}) as { massicot?: unknown; etiquettes?: unknown; tiroir?: unknown; afficheur?: { largeur?: unknown; hauteur?: unknown } | null };
     const a = c.afficheur;
     return {
         massicot: c.massicot === true,
-        etiquettes: c.etiquettes === true ? true : c.etiquettes === false ? false : null,
+        etiquettes: troisEtats(c.etiquettes),
+        tiroir: troisEtats(c.tiroir),
         afficheur: a && Number(a.largeur) > 0 && Number(a.hauteur) > 0 ? { largeur: Number(a.largeur), hauteur: Number(a.hauteur) } : null,
     };
 }
 
-/** Le verdict d'impression de l'application : un résultat, ou une `ErreurImpression`. */
+/** `true`, `false`, ou `null` quand le pilote ne sait pas. */
+function troisEtats(valeur: unknown): boolean | null {
+    return valeur === true ? true : valeur === false ? false : null;
+}
+
+interface VerdictBrut {
+    ok?: boolean;
+    code?: string;
+    message?: string;
+    simulation?: boolean;
+    tiroir?: VerdictBrut;
+}
+
+function lireTiroir(t: VerdictBrut): ResultatTiroir {
+    return t.ok ? { ouvert: true } : { ouvert: false, code: t.code || 'erreur', message: t.message || "Le tiroir-caisse ne s'est pas ouvert." };
+}
+
+/**
+ * Le verdict d'impression de l'application : un résultat, ou une
+ * `ErreurImpression`. Celui du tiroir-caisse, s'il était demandé, suit dans
+ * l'un comme dans l'autre.
+ */
 export function lireVerdict(brut: unknown): ResultatImpression {
-    const r = (brut || {}) as { ok?: boolean; code?: string; message?: string; simulation?: boolean };
-    if (r.ok) return { simulation: !!r.simulation };
-    throw new ErreurImpression(r.code || 'erreur', r.message || "L'impression a échoué.");
+    const r = (brut || {}) as VerdictBrut;
+    const tiroir = r.tiroir && typeof r.tiroir === 'object' ? lireTiroir(r.tiroir) : undefined;
+
+    if (!r.ok) {
+        const erreur = new ErreurImpression(r.code || 'erreur', r.message || "L'impression a échoué.");
+        if (tiroir) erreur.tiroir = tiroir;
+        throw erreur;
+    }
+
+    const resultat: ResultatImpression = { simulation: !!r.simulation };
+    if (tiroir) resultat.tiroir = tiroir;
+    return resultat;
 }

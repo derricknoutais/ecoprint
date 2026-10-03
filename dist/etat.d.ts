@@ -19,6 +19,8 @@ export interface Capacites {
     massicot: boolean;
     /** Papier étiquette accepté ; `null` quand le pilote ne peut pas le savoir d'avance (ZCS : l'essai tranche). */
     etiquettes: boolean | null;
+    /** Une prise de tiroir-caisse ; `null` quand le pilote ne peut pas le savoir d'avance. */
+    tiroir: boolean | null;
     /** L'écran tourné vers le client, s'il y en a un. */
     afficheur: FormatEcran | null;
 }
@@ -48,25 +50,48 @@ export interface OptionsEnvoi {
     support?: 'recu' | 'etiquette';
     /** Exemplaires d'une étiquette ; 1 par défaut. */
     copies?: number;
+    /** Ouvrir le tiroir-caisse avec ce reçu : il s'ouvre d'abord, puis le reçu sort aussitôt. */
+    tiroir?: boolean;
     /** Attente maximale du verdict, en ms. */
     delai?: number;
 }
 export interface ResultatImpression {
     /** Vrai si l'application tourne sans imprimante reconnue et n'a rien imprimé. */
     simulation: boolean;
+    /**
+     * Présent quand le reçu devait ouvrir le tiroir-caisse. Le reçu est sorti ;
+     * le tiroir, peut-être pas : un tiroir qui ne s'ouvre pas n'empêche pas le reçu.
+     */
+    tiroir?: ResultatTiroir;
+}
+export interface ResultatTiroir {
+    ouvert: boolean;
+    /** S'il ne s'est pas ouvert, pourquoi : `non-pris-en-charge`, `erreur`… */
+    code?: string;
+    message?: string;
 }
 /**
  * Une erreur du terminal. Son `code` : ceux de l'état (`papier`, `capot`…),
- * plus `delai`, `image`, et `non-pris-en-charge` — étiquettes ou écran client
- * que ce terminal, ou cette version de l'application, ne sait pas faire.
+ * plus `delai`, `image`, et `non-pris-en-charge` — étiquettes, tiroir-caisse
+ * ou écran client que ce terminal, ou cette version de l'application, ne sait
+ * pas faire.
  */
 export declare class ErreurImpression extends Error {
     readonly code: string;
+    /**
+     * Pour un reçu avec `tiroir: true` que le terminal n'a pas imprimé : le
+     * tiroir s'ouvre avant le reçu, il a donc pu s'ouvrir quand même.
+     */
+    tiroir?: ResultatTiroir;
     constructor(code: string, message: string);
 }
 export declare const MESSAGE_ABSENTE = "Imprimante injoignable : l'application EcoPrint n'est pas ouverte sur ce terminal (ou ce n'est pas un terminal).";
 export declare function etatAbsente(): EtatImprimante;
 /** L'état tel que l'application le décrit en JSON, complété et typé. */
 export declare function lireEtat(brut: unknown, transport: Transport): EtatImprimante;
-/** Le verdict d'impression de l'application : un résultat, ou une `ErreurImpression`. */
+/**
+ * Le verdict d'impression de l'application : un résultat, ou une
+ * `ErreurImpression`. Celui du tiroir-caisse, s'il était demandé, suit dans
+ * l'un comme dans l'autre.
+ */
 export declare function lireVerdict(brut: unknown): ResultatImpression;

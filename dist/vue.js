@@ -10,7 +10,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 import { defineComponent, h, onMounted, ref, watch } from 'vue';
 import { ErreurImpression } from "./etat.js";
 import { afficherClient, effacerClient } from "./ecran.js";
-import { apercuRecu, etatImprimante, imprimerRecu } from "./imprimer.js";
+import { apercuRecu, etatImprimante, imprimerRecu, ouvrirTiroir as ouvrirLeTiroir } from "./imprimer.js";
 /**
  * Imprimer depuis un composant Vue 3.
  *
@@ -21,6 +21,7 @@ export function useImprimante(options = {}) {
     const etat = ref(null);
     const enCours = ref(false);
     const erreur = ref(null);
+    const tiroir = ref(null);
     function detecter() {
         return __awaiter(this, void 0, void 0, function* () {
             etat.value = yield etatImprimante(options);
@@ -34,12 +35,16 @@ export function useImprimante(options = {}) {
                 return false;
             enCours.value = true;
             erreur.value = null;
+            tiroir.value = null;
             try {
-                yield imprimerRecu(recu, Object.assign(Object.assign({}, options), autres));
+                const resultat = yield imprimerRecu(recu, Object.assign(Object.assign({}, options), autres));
+                tiroir.value = resultat.tiroir || null;
                 return true;
             }
             catch (e) {
                 erreur.value = e instanceof Error ? e.message : String(e);
+                if (e instanceof ErreurImpression && e.tiroir)
+                    tiroir.value = e.tiroir;
                 return false;
             }
             finally {
@@ -49,12 +54,25 @@ export function useImprimante(options = {}) {
             }
         });
     }
+    function ouvrirTiroir() {
+        return __awaiter(this, void 0, void 0, function* () {
+            erreur.value = null;
+            try {
+                yield ouvrirLeTiroir(options);
+                return true;
+            }
+            catch (e) {
+                erreur.value = e instanceof Error ? e.message : String(e);
+                return false;
+            }
+        });
+    }
     // Pas de détection par défaut : sur un Chrome de bureau récent, interroger
     // 127.0.0.1 depuis un site public peut déclencher une demande d'accès au
     // réseau local. On détecte quand on imprime, ou quand on le demande.
     if (options.detecterAuMontage)
         onMounted(() => detecter().catch(() => undefined));
-    return { etat, enCours, erreur, imprimer, detecter };
+    return { etat, enCours, erreur, tiroir, imprimer, ouvrirTiroir, detecter };
 }
 /**
  * L'écran client depuis un composant Vue 3 : `afficher(contenu)` montre le

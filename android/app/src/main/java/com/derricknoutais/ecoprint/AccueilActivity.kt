@@ -131,8 +131,9 @@ class AccueilActivity : Activity() {
     private fun capacites(c: org.json.JSONObject?): String {
         if (c == null) return "Capacités : inconnues"
         val etiquettes = if (c.isNull("etiquettes")) "à l'essai" else if (c.optBoolean("etiquettes")) "oui" else "non"
+        val tiroir = if (c.isNull("tiroir")) "à l'essai" else if (c.optBoolean("tiroir")) "oui" else "non"
         val ecran = c.optJSONObject("afficheur")?.let { "${it.optInt("largeur")} × ${it.optInt("hauteur")}" } ?: "non"
-        return "Massicot : ${if (c.optBoolean("massicot")) "oui" else "non"} — Étiquettes : $etiquettes — Écran client : $ecran"
+        return "Massicot : ${if (c.optBoolean("massicot")) "oui" else "non"} — Étiquettes : $etiquettes — Tiroir-caisse : $tiroir — Écran client : $ecran"
     }
 
     private fun titre(texte: String) = TextView(this).apply {

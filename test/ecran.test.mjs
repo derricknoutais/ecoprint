@@ -126,7 +126,7 @@ test('une étiquette part avec son support et ses exemplaires', async () => {
         },
     };
     await envoyerParPont('AAAA', { support: 'etiquette', copies: 3 });
-    assert.deepEqual(options, { avance: 3, support: 'etiquette', copies: 3 });
+    assert.deepEqual(options, { avance: 3, support: 'etiquette', copies: 3, tiroir: false });
 });
 
 test('une étiquette est refusée d’avance là où le pilote sait qu’il n’y en a pas', async () => {

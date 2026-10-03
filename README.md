@@ -1,6 +1,6 @@
 # ecoprint
 
-Imprimer des reçus sur l'imprimante intégrée des terminaux Android — **Sunmi**, **ZCS** — depuis une application web : Laravel, Vue, ou rien du tout.
+Imprimer des reçus sur l'imprimante intégrée des terminaux Android — **Sunmi**, **ZCS** — depuis une application web : Laravel, Vue, ou rien du tout. Et, sur les terminaux qui les ont : étiquettes, tiroir-caisse, écran client.
 
 La page dessine le reçu en image noir et blanc, avec la police livrée par le paquet ; l'application Android **EcoPrint** reconnaît le terminal et l'envoie à son imprimante. L'aperçu à l'écran est donc exactement ce qui sort : accents, « FCFA », QR compris. Et la page ne sait pas sur quelle marque elle tourne : le même `imprimerRecu()` imprime partout.
 
@@ -146,22 +146,23 @@ try {
 | `refusee` | l'adresse de la page n'est pas autorisée dans EcoPrint |
 | `absente` | ni application ni service : navigateur de bureau, EcoPrint pas installée — ou, sur un ZCS, SDK pas encore intégré |
 | `delai` | aucun verdict dans le temps imparti |
-| `non-pris-en-charge` | étiquette ou écran client : ce terminal ne l'a pas, ou cette version d'EcoPrint ne le pilote pas encore |
+| `non-pris-en-charge` | étiquette, tiroir-caisse ou écran client : ce terminal ne l'a pas, ou cette version d'EcoPrint ne le pilote pas encore |
 
 `etatImprimante()` donne l'état sans imprimer, et la largeur du papier : le reçu est dessiné à la largeur de l'imprimante trouvée. Il dit aussi ce que sait faire le terminal :
 
 ```ts
 const { capacites } = await etatImprimante();
-// { massicot: true, etiquettes: null, afficheur: { largeur: 480, hauteur: 480 } }
+// { massicot: true, etiquettes: null, tiroir: null, afficheur: { largeur: 480, hauteur: 480 } }
 ```
 
 | | |
 |---|---|
 | `massicot` | le reçu est coupé une fois sorti — rien à demander, EcoPrint le fait |
 | `etiquettes` | `false` : pas de papier étiquette (Sunmi) ; `null` : le pilote ne peut pas le savoir d'avance, c'est l'essai qui tranche (ZCS) |
+| `tiroir` | une prise de tiroir-caisse : `true` sur un Sunmi de comptoir (T…, D…), `false` sur un portable (V2 Pro…) ; `null` quand on ne peut pas le savoir d'avance — sur un ZCS (le SDK ne le dit pas), sur un Sunmi de modèle inconnu, ou avec une application EcoPrint antérieure au protocole 3 : c'est l'essai qui tranche |
 | `afficheur` | la taille de l'écran client, ou `null` s'il n'y en a pas |
 
-`capacites` est absent avec une application EcoPrint antérieure au protocole 2 : la mettre à jour.
+`capacites` est absent avec une application EcoPrint antérieure au protocole 2 : la mettre à jour. Avant le protocole 3, `tiroir` y vaut `null` ; l'essai répond alors `non-pris-en-charge`, avec un message qui demande la mise à jour.
 
 ### Étiquettes
 
@@ -181,6 +182,38 @@ await imprimerRecu(
 ```
 
 L'imprimante passe en mode étiquette, imprime les exemplaires l'un après l'autre en se calant sur l'espace entre deux étiquettes, puis revient au reçu. `largeur` : celle de l'étiquette, en points (8 par mm) ; celle du rouleau par défaut. Rouleau étiquette chargé, sinon l'imprimante le dit.
+
+### Tiroir-caisse
+
+Le tiroir-caisse se branche sur la prise RJ11/RJ12 du terminal — « CASH BOX », « DRAWER » — : seuls les terminaux de comptoir en ont une. EcoPrint l'ouvre par le pilote du terminal (`openDrawer()` chez Sunmi, `openBox()` chez ZCS).
+
+Avec un reçu — le cas d'une vente payée en espèces :
+
+```ts
+try {
+    const resultat = await imprimerRecu(recu, { tiroir: true });
+    if (resultat.tiroir && !resultat.tiroir.ouvert) {
+        // Le reçu est sorti, le tiroir non : resultat.tiroir.message dit pourquoi.
+    }
+} catch (e) {
+    // Le reçu n'est pas sorti. Le tiroir a pu s'ouvrir quand même : e.tiroir le dit.
+    if (!(e instanceof ErreurImpression && e.tiroir && e.tiroir.ouvert)) await ouvrirTiroir();
+}
+```
+
+Le tiroir s'ouvre d'abord, et le reçu part aussitôt derrière, sans attendre que le tiroir ait répondu : il sort pendant que le caissier rend la monnaie. Un tiroir qui ne s'ouvre pas n'empêche pas le reçu : c'est `resultat.tiroir` qui le dit, pas une erreur. Un reçu refusé d'avance (plus de papier constaté avant l'envoi) n'ouvre rien ; un reçu qui échoue chez le terminal (papier épuisé en cours de route) a pu ouvrir le tiroir, et l'erreur le dit dans `tiroir`. Si la vente doit continuer sans reçu, n'appeler `ouvrirTiroir()` que si le tiroir n'est pas déjà ouvert — sinon la vente compterait une ouverture de trop.
+
+Sans reçu — rendu de monnaie, vente sans ticket :
+
+```ts
+import { ouvrirTiroir } from '@derricknoutais/ecoprint';
+
+await ouvrirTiroir();
+```
+
+`ouvrirTiroir()` se rejette avec `non-pris-en-charge` quand EcoPrint sait que le terminal n'a pas de prise (`capacites.tiroir === false` : un Sunmi portable) ou qu'il est trop ancien. Sur un ZCS (`tiroir: null`), le SDK ne le dit pas : sans prise, il rend `erreur` — ou réussit sans rien ouvrir.
+
+Ouvrir la caisse sans vente est un geste à tracer : c'est à l'application de dire qui y a droit (un rôle, un code de responsable) et de l'enregistrer. EcoPrint ne trie que les pages web — une page doit être autorisée, cadres intégrés compris (voir [Sécurité](#sécurité)) — et ne sait pas qui est devant la caisse. Comme pour l'impression, une requête locale sans en-tête `Origin` (un `curl` par `adb`, une autre application du terminal) et la page « Tester l'imprimante » ouvrent aussi le tiroir ; une application installée sur le terminal pourrait de toute façon l'ouvrir par le SDK du fabricant, sans EcoPrint.
 
 ## L'écran client
 
@@ -222,6 +255,8 @@ const { imprimer, enCours, erreur } = useImprimante();
 </template>
 ```
 
+`useImprimante()` rend aussi `ouvrirTiroir()`, qui se résout à `true` si le tiroir s'est ouvert et met l'erreur dans `erreur` sinon. Après `imprimer(recu, { tiroir: true })`, `tiroir.value` dit si le tiroir s'est ouvert (`{ ouvert, code, message }`) — que le reçu soit sorti ou non.
+
 Pour l'écran client, `useEcranClient()` rend `afficher(contenu)`, `effacer()`, `disponible`, `enCours` et `erreur`. L'appeler à chaque changement du panier : les demandes passent une à une et seule la plus récente est envoyée. Un terminal sans écran client, ou un navigateur de bureau, n'est pas une erreur : `disponible` passe à `false` et les appels suivants ne font plus rien — pas même une requête vers `127.0.0.1`.
 
 ```ts
@@ -241,10 +276,12 @@ const octets = versEscPos(await dessinerRecu(recu)); // à envoyer par Bluetooth
 
 Le reçu part en image tramée (`GS v 0`), que toutes les imprimantes thermiques comprennent : les accents sortent comme à l'aperçu, quelle que soit leur page de codes.
 
+Un tiroir-caisse branché sur l'imprimante s'ouvre avec `versEscPos(toile, { tiroir: true })` — `ESC p` en tête du reçu —, ou seul avec `tiroirEscPos()` (broche 2 ; `tiroirEscPos(5)` pour la broche 5).
+
 ## Sécurité
 
 - Le service n'écoute que sur `127.0.0.1` : injoignable depuis le réseau. Il ne répond qu'aux **origines autorisées** ; un refus arrive avec les en-têtes CORS, pour que la page puisse dire pourquoi. Une requête sans en-tête `Origin` ne vient pas d'un navigateur (un `curl` par `adb`) : elle passe, pour le diagnostic.
-- Android injecte le pont dans toutes les pages de la WebView : chaque appel vérifie que la page affichée est autorisée. Une page d'une autre origine reçoit `refusee`.
+- Android injecte le pont dans toutes les pages et tous les cadres de la WebView : chaque appel vérifie que la page principale affichée est autorisée. Une page d'une autre origine reçoit `refusee` — mais un cadre (iframe) tiers intégré à une page autorisée passe ce contrôle, et peut imprimer ou ouvrir le tiroir. Ne pas intégrer de cadre tiers (paiement, publicité, carte) dans une page autorisée, ou l'isoler avec `<iframe sandbox>` sans `allow-scripts`.
 - Mode coque : un certificat auto-signé n'est accepté que sur le réseau local (`10/8`, `172.16/12`, `192.168/16`), et seulement si la case est cochée.
 
 ## Compatibilité
@@ -257,8 +294,8 @@ Le reçu part en image tramée (`GS v 0`), que toutes les imprimantes thermiques
 
 ```bash
 npm install
-npm test          # compile, puis 85 tests : mise en page, dessin (Skia et la vraie police),
-                  # QR relu par ZXing, ESC/POS, pont, service local, écran client, étiquettes,
+npm test          # compile, puis 100 tests : mise en page, dessin (Skia et la vraie police),
+                  # QR relu par ZXing, ESC/POS, pont, service local, écran client, étiquettes, tiroir,
                   # montants, contrat page ↔ application, Chrome 62, Node 20
 ```
 
@@ -288,6 +325,6 @@ Les durées sont celles du verdict de l'imprimante, papier sorti.
 
 ## Limites connues
 
-- **Massicot, étiquettes, 80 mm et écran client** (protocole 2) sont écrits d'après le SDK ZCS 2.0.9 et testés hors terminal, mais pas encore sur un ZCS qui les a : le Z92S n'a ni massicot ni second écran.
+- **Massicot, étiquettes, 80 mm, écran client** (protocole 2) **et tiroir-caisse** (protocole 3) sont écrits d'après les SDK ZCS 2.0.9 et Sunmi, et testés hors terminal, mais pas encore sur un terminal qui les a : le Z92S et le V2 Pro sont des portables, sans massicot, prise de tiroir ni second écran.
 - **Jeu latin seulement** : un caractère absent de la police embarquée (chinois, arabe…) est rendu par une police du système, ou pas du tout.
 - **Signature de développement** : l'APK est signé avec la clé de débogage du poste qui le construit. Une mise à jour construite ailleurs ne s'installera pas par-dessus : prévoir une clé de publication avant d'équiper plusieurs terminaux.

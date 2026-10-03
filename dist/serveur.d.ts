@@ -30,6 +30,10 @@ export declare function etatServeur(options?: OptionsServeur): Promise<EtatImpri
  * dernière étiquette — est sorti, se rejette avec une `ErreurImpression` sinon.
  */
 export declare function envoyerAuServeur(pngBase64: string, options?: OptionsServeur & OptionsEnvoi): Promise<ResultatImpression>;
+/** Ouvre le tiroir-caisse branché sur le terminal. */
+export declare function ouvrirTiroirAuServeur(options?: OptionsServeur & {
+    delai?: number;
+}): Promise<ResultatImpression>;
 /** Affiche une image PNG (base64) sur l'écran client — ou l'efface si elle vaut `null`. */
 export declare function afficherAuServeur(pngBase64: string | null, options?: OptionsServeur & {
     delai?: number;

@@ -1,8 +1,8 @@
 import { defineComponent, h, onMounted, ref, watch, type PropType, type Ref } from 'vue';
 import type { Recu } from './document.ts';
-import { ErreurImpression, type EtatImprimante } from './etat.ts';
+import { ErreurImpression, type EtatImprimante, type ResultatTiroir } from './etat.ts';
 import { afficherClient, effacerClient, type OptionsEcran } from './ecran.ts';
-import { apercuRecu, etatImprimante, imprimerRecu, type OptionsImpression } from './imprimer.ts';
+import { apercuRecu, etatImprimante, imprimerRecu, ouvrirTiroir as ouvrirLeTiroir, type OptionsImpression } from './imprimer.ts';
 import type { OptionsServeur } from './serveur.ts';
 
 /**
@@ -17,13 +17,21 @@ export function useImprimante(options: OptionsServeur & { detecterAuMontage?: bo
     enCours: Ref<boolean>;
     /** Message de la dernière erreur, prêt à afficher ; `null` après un succès. */
     erreur: Ref<string | null>;
+    /**
+     * Après `imprimer(recu, { tiroir: true })` : le tiroir s'est-il ouvert, et
+     * sinon pourquoi — que le reçu soit sorti ou non. `null` sans tiroir demandé.
+     */
+    tiroir: Ref<ResultatTiroir | null>;
     /** Se résout à `true` si le reçu est sorti. Un second appel pendant l'impression est ignoré. */
     imprimer: (recu: Recu, autres?: OptionsImpression) => Promise<boolean>;
+    /** Se résout à `true` si le tiroir-caisse s'est ouvert ; l'erreur, sinon, dans `erreur`. */
+    ouvrirTiroir: () => Promise<boolean>;
     detecter: () => Promise<EtatImprimante>;
 } {
     const etat = ref<EtatImprimante | null>(null);
     const enCours = ref(false);
     const erreur = ref<string | null>(null);
+    const tiroir = ref<ResultatTiroir | null>(null);
 
     async function detecter(): Promise<EtatImprimante> {
         etat.value = await etatImprimante(options);
@@ -35,11 +43,14 @@ export function useImprimante(options: OptionsServeur & { detecterAuMontage?: bo
         if (enCours.value) return false;
         enCours.value = true;
         erreur.value = null;
+        tiroir.value = null;
         try {
-            await imprimerRecu(recu, { ...options, ...autres });
+            const resultat = await imprimerRecu(recu, { ...options, ...autres });
+            tiroir.value = resultat.tiroir || null;
             return true;
         } catch (e) {
             erreur.value = e instanceof Error ? e.message : String(e);
+            if (e instanceof ErreurImpression && e.tiroir) tiroir.value = e.tiroir;
             return false;
         } finally {
             enCours.value = false;
@@ -48,12 +59,23 @@ export function useImprimante(options: OptionsServeur & { detecterAuMontage?: bo
         }
     }
 
+    async function ouvrirTiroir(): Promise<boolean> {
+        erreur.value = null;
+        try {
+            await ouvrirLeTiroir(options);
+            return true;
+        } catch (e) {
+            erreur.value = e instanceof Error ? e.message : String(e);
+            return false;
+        }
+    }
+
     // Pas de détection par défaut : sur un Chrome de bureau récent, interroger
     // 127.0.0.1 depuis un site public peut déclencher une demande d'accès au
     // réseau local. On détecte quand on imprime, ou quand on le demande.
     if (options.detecterAuMontage) onMounted(() => detecter().catch(() => undefined));
 
-    return { etat, enCours, erreur, imprimer, detecter };
+    return { etat, enCours, erreur, tiroir, imprimer, ouvrirTiroir, detecter };
 }
 
 /**

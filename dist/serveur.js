@@ -55,7 +55,12 @@ export function envoyerAuServeur(pngBase64, options = {}) {
         avance: options.avance === undefined ? 3 : options.avance,
         support: options.support || 'recu',
         copies: options.copies || 1,
+        tiroir: !!options.tiroir,
     }, options.port, options.delai || 65000);
+}
+/** Ouvre le tiroir-caisse branché sur le terminal. */
+export function ouvrirTiroirAuServeur(options = {}) {
+    return poster('/tiroir', {}, options.port, options.delai || 15000);
 }
 /** Affiche une image PNG (base64) sur l'écran client — ou l'efface si elle vaut `null`. */
 export function afficherAuServeur(pngBase64, options = {}) {
@@ -80,7 +85,7 @@ function poster(chemin, corps, port, delai) {
                 throw e;
             throw new ErreurImpression('absente', "Le service d'impression ne répond plus : l'application EcoPrint est-elle ouverte ?");
         }
-        // Une application antérieure au protocole 2 ne connaît pas l'écran client.
+        // Une application plus ancienne ne connaît pas cette route : écran client (protocole 2), tiroir (3).
         if (reponse.status === 404) {
             throw new ErreurImpression('non-pris-en-charge', "Cette version d'EcoPrint ne sait pas faire cela : la mettre à jour.");
         }

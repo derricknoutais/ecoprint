@@ -7,8 +7,9 @@ import { type EtatImprimante, type OptionsEnvoi, type ResultatImpression } from 
 /**
  * Version du protocole entre la page et l'application.
  * 2 : étiquettes (`support`, `copies`), écran client (`afficher`, `effacer`), capacités dans l'état.
+ * 3 : tiroir-caisse (`ouvrirTiroir`, option `tiroir` d'une impression).
  */
-export declare const VERSION_PONT = "2";
+export declare const VERSION_PONT = "3";
 /** Vrai si la page est ouverte dans l'application EcoPrint. */
 export declare function pontDisponible(): boolean;
 /** Version du protocole annoncée par l'application, ou `null` hors application. */
@@ -20,6 +21,10 @@ export declare function etatPont(): EtatImprimante;
  * résout quand le reçu — ou la dernière étiquette — est SORTI.
  */
 export declare function envoyerParPont(pngBase64: string, options?: OptionsEnvoi): Promise<ResultatImpression>;
+/** Ouvre le tiroir-caisse branché sur le terminal. */
+export declare function ouvrirTiroirParPont(options?: {
+    delai?: number;
+}): Promise<ResultatImpression>;
 /** Affiche une image PNG (base64) sur l'écran client — ou l'efface si elle vaut `null`. */
 export declare function afficherParPont(pngBase64: string | null, options?: {
     delai?: number;

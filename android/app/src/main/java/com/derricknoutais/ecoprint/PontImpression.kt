@@ -13,8 +13,11 @@ import org.json.JSONObject
  * l'interface : les réponses repassent par `runOnUiThread`.
  *
  * Android injecte cet objet dans TOUTES les pages et tous les cadres de la
- * WebView ; chaque appel vérifie donc que la page affichée est bien
- * une adresse autorisée, ou la page de test embarquée.
+ * WebView ; chaque appel vérifie donc que la page principale affichée est bien
+ * une adresse autorisée, ou la page de test embarquée. C'est l'adresse de la
+ * page principale qui compte : un cadre (iframe) d'une autre origine intégré
+ * à une page autorisée passe ce contrôle — d'où le conseil du README de ne pas
+ * intégrer de cadre tiers dans une page autorisée.
  */
 class PontImpression(private val activite: MainActivity, private val app: EcoPrintApp) {
 
@@ -40,13 +43,18 @@ class PontImpression(private val activite: MainActivity, private val app: EcoPri
         val image = Protocole.image(pngBase64)
             ?: return repondre(id, Protocole.echec("image", "Image du reçu illisible."))
 
-        if (app.simulation) {
-            // Aucune imprimante reconnue : on montre le reçu au lieu de l'imprimer.
-            activite.runOnUiThread { activite.montrerSimulation(image) }
-            return repondre(id, JSONObject().put("ok", true).put("simulation", true))
-        }
+        // Aucune imprimante reconnue : on montre le reçu au lieu de l'imprimer.
+        if (app.simulation) activite.runOnUiThread { activite.montrerSimulation(image) }
 
-        app.pilote.imprimer(image, demande) { resultat -> repondre(id, resultat) }
+        app.pilote.imprimerAvecTiroir(image, demande) { resultat -> repondre(id, resultat) }
+    }
+
+    /** Ouvre le tiroir-caisse branché sur le terminal. */
+    @JavascriptInterface
+    fun ouvrirTiroir(id: String) {
+        Log.i(JOURNAL, "pont : tiroir $id")
+        if (!activite.pageDeConfiance()) return repondre(id, refus().put("ok", false))
+        app.pilote.ouvrirTiroir { resultat -> repondre(id, resultat) }
     }
 
     /** Affiche une image sur l'écran client du terminal. */

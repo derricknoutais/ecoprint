@@ -7,6 +7,25 @@ const GS = 0x1d;
 /** Lignes par commande GS v 0 : les imprimantes d'entrée de gamme saturent au-delà. */
 const BANDE = 255;
 
+/** Options de `versEscPos` et `rasterEscPos`. */
+export interface OptionsEscPos {
+    /** Lignes d'avance après le reçu ; 4 par défaut. */
+    avance?: number;
+    /** `ESC @` en tête ; vrai par défaut. */
+    initialiser?: boolean;
+    /** Ouvrir le tiroir-caisse branché sur l'imprimante, avant le reçu. */
+    tiroir?: boolean;
+}
+
+/**
+ * `ESC p m t1 t2` : une impulsion sur la prise du tiroir-caisse de
+ * l'imprimante — broche 2 (`m` = 0, la plus courante) ou 5 (`m` = 1) —, 50 ms
+ * d'impulsion, 500 ms de repos.
+ */
+export function tiroirEscPos(broche: 2 | 5 = 2): Uint8Array {
+    return Uint8Array.from([ESC, 0x70, broche === 5 ? 1 : 0, 25, 250]);
+}
+
 /**
  * Le reçu dessiné, en commandes ESC/POS « image tramée » (GS v 0), pour une
  * imprimante thermique autre que celle du terminal : réseau, Bluetooth, USB.
@@ -15,7 +34,7 @@ const BANDE = 255;
  * codes : les accents et « FCFA » sortent exactement comme à l'aperçu, ce que
  * du texte envoyé en UTF-8 ne garantit sur aucune.
  */
-export function versEscPos(toile: Toile, options: { avance?: number; initialiser?: boolean } = {}): Uint8Array {
+export function versEscPos(toile: Toile, options: OptionsEscPos = {}): Uint8Array {
     const ctx = toile.getContext('2d');
     if (!ctx) throw new Error('Canvas 2D indisponible.');
     const gris = niveauxDeGris(ctx.getImageData(0, 0, toile.width, toile.height).data);
@@ -27,12 +46,14 @@ export function rasterEscPos(
     estNoir: (x: number, y: number) => boolean,
     largeur: number,
     hauteur: number,
-    options: { avance?: number; initialiser?: boolean } = {},
+    options: OptionsEscPos = {},
 ): Uint8Array {
     const octetsParLigne = Math.ceil(largeur / 8);
     const sortie: number[] = [];
 
     if (options.initialiser !== false) sortie.push(ESC, 0x40);
+    // En tête : le tiroir s'ouvre pendant que le reçu s'imprime.
+    if (options.tiroir) sortie.push(...Array.from(tiroirEscPos()));
 
     for (let debut = 0; debut < hauteur; debut += BANDE) {
         const lignes = Math.min(BANDE, hauteur - debut);

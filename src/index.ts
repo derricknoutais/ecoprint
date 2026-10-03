@@ -11,7 +11,7 @@ export type {
     Taille,
 } from './document.ts';
 export { dessinerRecu, environnementNavigateur, type Environnement, type ImageChargee, type OptionsDessin, type Toile } from './dessin.ts';
-export { rasterEscPos, versEscPos } from './escpos.ts';
+export { rasterEscPos, tiroirEscPos, versEscPos, type OptionsEscPos } from './escpos.ts';
 export { afficherClient, dessinerEcran, effacerClient, type OptionsEcran } from './ecran.ts';
 export {
     ErreurImpression,
@@ -21,10 +21,11 @@ export {
     type FormatEcran,
     type OptionsEnvoi,
     type ResultatImpression,
+    type ResultatTiroir,
     type Transport,
 } from './etat.ts';
 export { ecranExemple, etiquetteExemple, mire, recuExemple } from './exemples.ts';
-export { apercuRecu, etatImprimante, imprimerRecu, type OptionsImpression } from './imprimer.ts';
+export { apercuRecu, etatImprimante, imprimerRecu, ouvrirTiroir, type OptionsImpression } from './imprimer.ts';
 export { LARGEUR_58MM, LARGEUR_80MM, TAILLES } from './metriques.ts';
 export { montant } from './montant.ts';
 export { chargerPolice, FAMILLE } from './police.ts';

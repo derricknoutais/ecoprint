@@ -25,8 +25,9 @@ import kotlin.concurrent.thread
  * paquet web ecoprint.
  *
  *   GET  /etat      → l'état de l'imprimante et les capacités du terminal
- *   POST /imprimer  → {"image": "<PNG base64>", "avance": 3, "support": "recu"|"etiquette", "copies": 1} ;
+ *   POST /imprimer  → {"image": "<PNG base64>", "avance": 3, "support": "recu"|"etiquette", "copies": 1, "tiroir": false} ;
  *                     répond quand le reçu (ou la dernière étiquette) est sorti
+ *   POST /tiroir    → ouvre le tiroir-caisse
  *   POST /afficher  → {"image": "<PNG base64>"} : l'image sur l'écran client
  *   POST /effacer   → efface l'écran client
  *
@@ -140,6 +141,7 @@ class ServeurImpression(
             "POST /imprimer" -> Reponse(200, imprimer(r.corps).toString(), cors)
             "POST /afficher" -> Reponse(200, afficher(r.corps).toString(), cors)
             "POST /effacer" -> Reponse(200, attendre { app.pilote.afficher(null, it) }.toString(), cors)
+            "POST /tiroir" -> Reponse(200, attendre { app.pilote.ouvrirTiroir(it) }.toString(), cors)
             else -> Reponse(404, JSONObject().put("ok", false).put("code", "introuvable").put("message", "${r.methode} ${r.chemin} inconnu.").toString(), cors)
         }
     }
@@ -158,10 +160,9 @@ class ServeurImpression(
                     Log.w(JOURNAL, "Simulation non enregistrée : ${e.message}")
                 }
             }
-            return JSONObject().put("ok", true).put("simulation", true)
         }
 
-        return attendre { app.pilote.imprimer(image, options, it) }
+        return attendre { app.pilote.imprimerAvecTiroir(image, options, it) }
     }
 
     private fun afficher(corps: ByteArray): JSONObject {

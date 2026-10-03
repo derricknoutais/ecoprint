@@ -14,10 +14,12 @@ import {
     etiquetteExemple,
     imprimerRecu,
     mire,
+    ouvrirTiroir,
     recuExemple,
     versionPont,
     type EtatImprimante,
     type Recu,
+    type ResultatTiroir,
 } from '../src/index.ts';
 
 const element = (id: string): HTMLElement => {
@@ -59,7 +61,11 @@ async function afficherEtat(): Promise<void> {
     const c = etat.capacites;
     element('capacites').textContent = !c
         ? '—'
-        : `massicot ${c.massicot ? 'oui' : 'non'} · étiquettes ${c.etiquettes === null ? 'à l’essai' : c.etiquettes ? 'oui' : 'non'} · écran client ${c.afficheur ? `${c.afficheur.largeur} × ${c.afficheur.hauteur}` : 'non'}`;
+        : `massicot ${ouiNon(c.massicot)} · étiquettes ${ouiNon(c.etiquettes)} · tiroir ${ouiNon(c.tiroir)} · écran client ${c.afficheur ? `${c.afficheur.largeur} × ${c.afficheur.hauteur}` : 'non'}`;
+}
+
+function ouiNon(valeur: boolean | null): string {
+    return valeur === null ? 'à l’essai' : valeur ? 'oui' : 'non';
 }
 
 /** Un dégradé noir → blanc, pour juger la trame de l'imprimante. */
@@ -131,6 +137,26 @@ function essayer(bouton: string, action: () => Promise<unknown>, succes: string)
 essayer('etiquette', () => imprimerRecu(etiquetteExemple(), { support: 'etiquette', copies: 1 }), 'Étiquette imprimée');
 essayer('ecran', () => afficherClient(ecranExemple()), 'Écran client affiché');
 essayer('effacer', () => effacerClient(), 'Écran client effacé');
+essayer('tiroir', () => ouvrirTiroir(), 'Tiroir-caisse ouvert');
+
+function signalerTiroir(tiroir: ResultatTiroir | undefined): void {
+    if (!tiroir) return;
+    if (tiroir.ouvert) journal('Tiroir-caisse ouvert.', 'ok');
+    else journal(`Tiroir-caisse : [${tiroir.code}] ${tiroir.message}`, 'erreur');
+}
+essayer(
+    'recu-tiroir',
+    () =>
+        imprimerRecu(recuAffiche, { tiroir: true }).then(
+            (resultat) => signalerTiroir(resultat.tiroir),
+            (e) => {
+                // Le reçu a échoué : le tiroir a pu s'ouvrir quand même.
+                if (e instanceof ErreurImpression) signalerTiroir(e.tiroir);
+                throw e;
+            },
+        ),
+    'Reçu imprimé',
+);
 
 montrer(recuAffiche);
 afficherEtat().then(() => {

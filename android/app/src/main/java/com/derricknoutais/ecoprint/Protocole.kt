@@ -11,14 +11,18 @@ import org.json.JSONObject
  */
 object Protocole {
 
-    /** Doit rester égale à VERSION_PONT dans src/pont.ts. 2 : étiquettes, écran client, capacités. */
-    const val VERSION = "2"
+    /**
+     * Doit rester égale à VERSION_PONT dans src/pont.ts.
+     * 2 : étiquettes, écran client, capacités. 3 : tiroir-caisse.
+     */
+    const val VERSION = "3"
 
-    /** `{avance, support: 'recu' | 'etiquette', copies}`, bornés : une page qui se trompe ne vide pas le rouleau. */
+    /** `{avance, support: 'recu' | 'etiquette', copies, tiroir}`, bornés : une page qui se trompe ne vide pas le rouleau. */
     fun options(json: JSONObject?): OptionsImpression = OptionsImpression(
         avance = (json?.optInt("avance", 3) ?: 3).coerceIn(0, 20),
         etiquette = json?.optString("support") == "etiquette",
         copies = (json?.optInt("copies", 1) ?: 1).coerceIn(1, 50),
+        tiroir = json?.optBoolean("tiroir", false) ?: false,
     )
 
     fun image(pngBase64: String?): Bitmap? = try {

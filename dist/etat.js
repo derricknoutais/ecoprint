@@ -1,8 +1,9 @@
 import { LARGEUR_58MM } from "./metriques.js";
 /**
  * Une erreur du terminal. Son `code` : ceux de l'état (`papier`, `capot`…),
- * plus `delai`, `image`, et `non-pris-en-charge` — étiquettes ou écran client
- * que ce terminal, ou cette version de l'application, ne sait pas faire.
+ * plus `delai`, `image`, et `non-pris-en-charge` — étiquettes, tiroir-caisse
+ * ou écran client que ce terminal, ou cette version de l'application, ne sait
+ * pas faire.
  */
 export class ErreurImpression extends Error {
     constructor(code, message) {
@@ -25,14 +26,34 @@ function lireCapacites(brut) {
     const a = c.afficheur;
     return {
         massicot: c.massicot === true,
-        etiquettes: c.etiquettes === true ? true : c.etiquettes === false ? false : null,
+        etiquettes: troisEtats(c.etiquettes),
+        tiroir: troisEtats(c.tiroir),
         afficheur: a && Number(a.largeur) > 0 && Number(a.hauteur) > 0 ? { largeur: Number(a.largeur), hauteur: Number(a.hauteur) } : null,
     };
 }
-/** Le verdict d'impression de l'application : un résultat, ou une `ErreurImpression`. */
+/** `true`, `false`, ou `null` quand le pilote ne sait pas. */
+function troisEtats(valeur) {
+    return valeur === true ? true : valeur === false ? false : null;
+}
+function lireTiroir(t) {
+    return t.ok ? { ouvert: true } : { ouvert: false, code: t.code || 'erreur', message: t.message || "Le tiroir-caisse ne s'est pas ouvert." };
+}
+/**
+ * Le verdict d'impression de l'application : un résultat, ou une
+ * `ErreurImpression`. Celui du tiroir-caisse, s'il était demandé, suit dans
+ * l'un comme dans l'autre.
+ */
 export function lireVerdict(brut) {
     const r = (brut || {});
-    if (r.ok)
-        return { simulation: !!r.simulation };
-    throw new ErreurImpression(r.code || 'erreur', r.message || "L'impression a échoué.");
+    const tiroir = r.tiroir && typeof r.tiroir === 'object' ? lireTiroir(r.tiroir) : undefined;
+    if (!r.ok) {
+        const erreur = new ErreurImpression(r.code || 'erreur', r.message || "L'impression a échoué.");
+        if (tiroir)
+            erreur.tiroir = tiroir;
+        throw erreur;
+    }
+    const resultat = { simulation: !!r.simulation };
+    if (tiroir)
+        resultat.tiroir = tiroir;
+    return resultat;
 }

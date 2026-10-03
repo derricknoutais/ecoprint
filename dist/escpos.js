@@ -4,6 +4,14 @@ const GS = 0x1d;
 /** Lignes par commande GS v 0 : les imprimantes d'entrée de gamme saturent au-delà. */
 const BANDE = 255;
 /**
+ * `ESC p m t1 t2` : une impulsion sur la prise du tiroir-caisse de
+ * l'imprimante — broche 2 (`m` = 0, la plus courante) ou 5 (`m` = 1) —, 50 ms
+ * d'impulsion, 500 ms de repos.
+ */
+export function tiroirEscPos(broche = 2) {
+    return Uint8Array.from([ESC, 0x70, broche === 5 ? 1 : 0, 25, 250]);
+}
+/**
  * Le reçu dessiné, en commandes ESC/POS « image tramée » (GS v 0), pour une
  * imprimante thermique autre que celle du terminal : réseau, Bluetooth, USB.
  *
@@ -24,6 +32,9 @@ export function rasterEscPos(estNoir, largeur, hauteur, options = {}) {
     const sortie = [];
     if (options.initialiser !== false)
         sortie.push(ESC, 0x40);
+    // En tête : le tiroir s'ouvre pendant que le reçu s'imprime.
+    if (options.tiroir)
+        sortie.push(...Array.from(tiroirEscPos()));
     for (let debut = 0; debut < hauteur; debut += BANDE) {
         const lignes = Math.min(BANDE, hauteur - debut);
         // GS v 0 m xL xH yL yH : largeur en octets, hauteur en lignes.

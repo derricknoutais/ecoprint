@@ -9,8 +9,9 @@ import { ErreurImpression, etatAbsente, lireEtat, lireVerdict, type EtatImpriman
 /**
  * Version du protocole entre la page et l'application.
  * 2 : étiquettes (`support`, `copies`), écran client (`afficher`, `effacer`), capacités dans l'état.
+ * 3 : tiroir-caisse (`ouvrirTiroir`, option `tiroir` d'une impression).
  */
-export const VERSION_PONT = '2';
+export const VERSION_PONT = '3';
 
 interface PontNatif {
     version(): string;
@@ -20,6 +21,8 @@ interface PontNatif {
     afficher?(id: string, pngBase64: string): void;
     /** Protocole 2 et plus. */
     effacer?(id: string): void;
+    /** Protocole 3 et plus. */
+    ouvrirTiroir?(id: string): void;
 }
 
 interface Attente {
@@ -36,6 +39,8 @@ interface Attente {
 interface Retours {
     attentes: Map<string, Attente>;
     retour(id: string, resultat: string): void;
+    /** Le protocole que lit `retour` ; absent avant le 3. */
+    version?: number;
 }
 
 type FenetreAvecPont = Window & { EcoPrint?: PontNatif; __ecoprint?: Retours };
@@ -80,8 +85,18 @@ export function envoyerParPont(pngBase64: string, options: OptionsEnvoi = {}): P
         avance: options.avance === undefined ? 3 : options.avance,
         support: options.support || 'recu',
         copies: options.copies || 1,
+        tiroir: !!options.tiroir,
     });
     return demander((p, id) => p.imprimer(id, pngBase64, details), options.delai || 60000, "L'imprimante n'a pas répondu");
+}
+
+/** Ouvre le tiroir-caisse branché sur le terminal. */
+export function ouvrirTiroirParPont(options: { delai?: number } = {}): Promise<ResultatImpression> {
+    const p = pont();
+    if (p && typeof p.ouvrirTiroir !== 'function') {
+        return Promise.reject(new ErreurImpression('non-pris-en-charge', "Cette version d'EcoPrint ne pilote pas le tiroir-caisse : la mettre à jour."));
+    }
+    return demander((natif, id) => natif.ouvrirTiroir!(id), options.delai || 15000, "Le tiroir-caisse n'a pas répondu");
 }
 
 /** Affiche une image PNG (base64) sur l'écran client — ou l'efface si elle vaut `null`. */
@@ -125,25 +140,34 @@ function demander(appel: (p: PontNatif, id: string) => void, delai: number, sans
     });
 }
 
+/**
+ * Le `retour` le plus récent l'emporte : celui d'une copie plus ancienne du
+ * paquet lirait les verdicts sans ce que les protocoles suivants y ajoutent
+ * (le tiroir). Les attentes déjà en cours sont gardées : le nouveau `retour`
+ * les lit dans la même table, et son verdict en dit plus, jamais moins.
+ */
 function installerRetours(f: FenetreAvecPont): Retours {
-    if (!f.__ecoprint) {
-        const attentes = new Map<string, Attente>();
-        f.__ecoprint = {
-            attentes,
-            retour(id, resultat) {
-                const attente = attentes.get(id);
-                // Réponse arrivée après le délai : la promesse est déjà rejetée.
-                if (!attente) return;
-                attentes.delete(id);
-                clearTimeout(attente.minuteur);
+    const existants = f.__ecoprint;
+    if (existants && (existants.version || 0) >= Number(VERSION_PONT)) return existants;
 
-                try {
-                    attente.resoudre(lireVerdict(JSON.parse(resultat)));
-                } catch (e) {
-                    attente.rejeter(e instanceof ErreurImpression ? e : new ErreurImpression('erreur', "Réponse illisible de l'application."));
-                }
-            },
-        };
-    }
-    return f.__ecoprint;
+    const attentes = existants ? existants.attentes : new Map<string, Attente>();
+    const retours: Retours = {
+        attentes,
+        version: Number(VERSION_PONT),
+        retour(id, resultat) {
+            const attente = attentes.get(id);
+            // Réponse arrivée après le délai : la promesse est déjà rejetée.
+            if (!attente) return;
+            attentes.delete(id);
+            clearTimeout(attente.minuteur);
+
+            try {
+                attente.resoudre(lireVerdict(JSON.parse(resultat)));
+            } catch (e) {
+                attente.rejeter(e instanceof ErreurImpression ? e : new ErreurImpression('erreur', "Réponse illisible de l'application."));
+            }
+        },
+    };
+    f.__ecoprint = retours;
+    return retours;
 }

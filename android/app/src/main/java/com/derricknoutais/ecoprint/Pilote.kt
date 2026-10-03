@@ -7,6 +7,8 @@ import com.derricknoutais.sunmiprint.ImprimanteSunmi
 import com.derricknoutais.zcsprint.AfficheurZcs
 import com.derricknoutais.zcsprint.ImprimanteZcs
 import org.json.JSONObject
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 
 /** Ce que la page demande pour une impression. */
 data class OptionsImpression(
@@ -15,6 +17,8 @@ data class OptionsImpression(
     /** Vrai pour du papier étiquette : l'image est une étiquette, imprimée `copies` fois. */
     val etiquette: Boolean = false,
     val copies: Int = 1,
+    /** Vrai pour ouvrir le tiroir-caisse avec ce reçu. */
+    val tiroir: Boolean = false,
 )
 
 /**
@@ -32,19 +36,48 @@ interface Pilote {
     fun etat(): JSONObject
 
     /**
-     * Ce que le terminal sait faire : `{massicot, etiquettes, afficheur}`,
-     * `afficheur` valant `{largeur, hauteur}` ou `null`, `etiquettes` `null`
-     * quand le pilote ne peut pas le savoir d'avance.
+     * Ce que le terminal sait faire : `{massicot, etiquettes, tiroir, afficheur}`,
+     * `afficheur` valant `{largeur, hauteur}` ou `null`, `etiquettes` et
+     * `tiroir` `null` quand le pilote ne peut pas le savoir d'avance.
      */
     fun capacites(): JSONObject
 
     /** Imprime l'image et appelle `fini` une seule fois, avec le verdict de l'imprimante. */
     fun imprimer(image: Bitmap, options: OptionsImpression, fini: (JSONObject) -> Unit)
 
+    /** Ouvre le tiroir-caisse branché sur le terminal et appelle `fini` une seule fois. */
+    fun ouvrirTiroir(fini: (JSONObject) -> Unit)
+
     /** Affiche l'image sur l'écran client — ou l'efface si elle est `null` — et appelle `fini` une seule fois. */
     fun afficher(image: Bitmap?, fini: (JSONObject) -> Unit)
 
     fun arreter()
+}
+
+/**
+ * Imprime, en ouvrant d'abord le tiroir-caisse si la page le demande. Les deux
+ * demandes partent l'une derrière l'autre dans la file du pilote : le tiroir
+ * s'ouvre, puis le reçu sort aussitôt, sans attendre que le tiroir ait
+ * répondu. Le verdict du reçu porte celui du tiroir dans `tiroir` — même quand
+ * le reçu échoue (papier épuisé en cours de route…), le tiroir, lui, a pu
+ * s'ouvrir. Un tiroir qui ne s'ouvre pas n'empêche pas le reçu.
+ */
+fun Pilote.imprimerAvecTiroir(image: Bitmap, options: OptionsImpression, fini: (JSONObject) -> Unit) {
+    if (!options.tiroir) return imprimer(image, options, fini)
+
+    val tiroir = AtomicReference<JSONObject>()
+    val verdict = AtomicReference<JSONObject>()
+    val attendus = AtomicInteger(2)
+    val rendre = { if (attendus.decrementAndGet() == 0) fini(verdict.get().put("tiroir", tiroir.get())) }
+
+    ouvrirTiroir {
+        tiroir.set(it)
+        rendre()
+    }
+    imprimer(image, options) {
+        verdict.set(it)
+        rendre()
+    }
 }
 
 private fun nonPrisEnCharge(message: String): JSONObject =
@@ -53,13 +86,18 @@ private fun nonPrisEnCharge(message: String): JSONObject =
 private class PiloteSunmi(private val imprimante: ImprimanteSunmi) : Pilote {
     override val nom = "sunmi"
     override fun etat() = imprimante.etat()
-    override fun capacites(): JSONObject =
-        JSONObject().put("massicot", false).put("etiquettes", false).put("afficheur", JSONObject.NULL)
+    override fun capacites(): JSONObject = JSONObject()
+        .put("massicot", false)
+        .put("etiquettes", false)
+        .put("tiroir", imprimante.aUnTiroir() ?: JSONObject.NULL)
+        .put("afficheur", JSONObject.NULL)
 
     override fun imprimer(image: Bitmap, options: OptionsImpression, fini: (JSONObject) -> Unit) {
         if (options.etiquette) return fini(nonPrisEnCharge("Le pilote Sunmi n'imprime pas encore d'étiquettes."))
         imprimante.imprimer(image, options.avance, fini)
     }
+
+    override fun ouvrirTiroir(fini: (JSONObject) -> Unit) = imprimante.ouvrirTiroir(fini)
 
     override fun afficher(image: Bitmap?, fini: (JSONObject) -> Unit) =
         fini(nonPrisEnCharge("Le pilote Sunmi ne pilote pas encore d'écran client."))
@@ -73,6 +111,8 @@ private class PiloteZcs(private val imprimante: ImprimanteZcs, private val affic
     override fun capacites(): JSONObject = imprimante.capacites().put("afficheur", afficheur.format() ?: JSONObject.NULL)
     override fun imprimer(image: Bitmap, options: OptionsImpression, fini: (JSONObject) -> Unit) =
         imprimante.imprimer(image, options.avance, options.etiquette, options.copies, fini)
+
+    override fun ouvrirTiroir(fini: (JSONObject) -> Unit) = imprimante.ouvrirTiroir(fini)
 
     override fun afficher(image: Bitmap?, fini: (JSONObject) -> Unit) = afficheur.afficher(image, fini)
     override fun arreter() = imprimante.arreter()
@@ -90,11 +130,17 @@ class PiloteSimulation : Pilote {
         .put("message", "Aucune imprimante reconnue sur ${Pilotes.terminal()} : simulation, rien ne sera imprimé.")
         .put("largeur", Pilotes.LARGEUR_58MM)
 
-    override fun capacites(): JSONObject =
-        JSONObject().put("massicot", false).put("etiquettes", false).put("afficheur", JSONObject.NULL)
+    override fun capacites(): JSONObject = JSONObject()
+        .put("massicot", false)
+        .put("etiquettes", false)
+        .put("tiroir", false)
+        .put("afficheur", JSONObject.NULL)
 
     override fun imprimer(image: Bitmap, options: OptionsImpression, fini: (JSONObject) -> Unit) =
         fini(JSONObject().put("ok", true).put("simulation", true))
+
+    override fun ouvrirTiroir(fini: (JSONObject) -> Unit) =
+        fini(nonPrisEnCharge("Pas de tiroir-caisse sur ${Pilotes.terminal()}."))
 
     override fun afficher(image: Bitmap?, fini: (JSONObject) -> Unit) =
         fini(nonPrisEnCharge("Pas d'écran client sur ${Pilotes.terminal()}."))
